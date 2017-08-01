@@ -1,0 +1,21 @@
+#!/usr/bin/env perl
+use extreme;
+
+my @snapshots
+  = `find /vz/private/*/root.hdd/ -type f -name 'root.hdd.*' 2>/dev/null`;
+my $now           = time;
+my $CRITICAL_TIME = 7;      # days
+my $exit_code   = 0;
+chomp(@snapshots);
+
+for my $snapshot (@snapshots) {
+    my $snapshots_mdtm = ( stat($snapshot) )[9];
+    my $diff = int( ( $now - $snapshots_mdtm ) / 86400 );
+    if ( $diff > $CRITICAL_TIME ) {
+        say "$snapshot created: $diff days ago";
+        $exit_code = 1;
+    }
+}
+
+say "OK - no overdue snapshots found" if !$exit_code;
+exit $exit_code;

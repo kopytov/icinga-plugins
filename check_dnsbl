@@ -1,0 +1,116 @@
+#!/usr/bin/env perl
+use extreme;
+use Socket;
+use Sys::Hostname;
+use File::Slurp;
+use Net::DNS;
+
+my @incidents;
+
+use constant {
+    OK       => 0,
+    WARNING  => 1,
+    CRITICAL => 2,
+    UNKNOWN  => 3,
+};
+
+my @rbls = qw/
+  bl.emailbasura.org
+  zombie.dnsbl.sorbs.net
+  combined.rbl.msrbl.net
+  ix.dnsbl.manitu.net
+  bl.spamcop.net
+  dsn.rfc-ignorant.org
+  multi.surbl.org
+  bl.spamcannibal.org
+  cblless.anti-spam.org.cn
+  cblplus.anti-spam.org.cn
+  cbl.anti-spam.org.cn
+  blackholes.five-ten-sg.com
+  sorbs.dnsbl.net.au
+  dnsbl.sorbs.net
+  zen.spamhaus.org
+  db.wpbl.info
+  rmst.dnsbl.net.au
+  dnsbl.kempt.net
+  blacklist.woody.ch
+  psbl.surriel.com
+  virbl.bit.nl
+  rot.blackhole.cantv.net
+  virus.rbl.jp
+  wormrbl.imp.ch
+  spamrbl.imp.ch
+  virus.rbl.msrbl.net
+  phishing.rbl.msrbl.net
+  images.rbl.msrbl.net
+  spam.rbl.msrbl.net
+  rbl.interserver.net
+  spamlist.or.kr
+  dyna.spamrats.com
+  dnsbl.abuse.ch
+  dnsbl.inps.de
+  dnsbl.dronebl.org
+  bl.deadbeef.com
+  ricn.dnsbl.net.au
+  forbidden.icm.edu.pl
+  probes.dnsbl.net.au
+  ubl.unsubscore.com
+  b.barracudacentral.org
+  ksi.dnsbl.net.au
+  uribl.swinog.ch
+  bsb.spamlookup.net
+  dob.sibl.support-intelligence.net
+  url.rbl.jp
+  dyndns.rbl.jp
+  bogons.cymru.com
+  omrs.dnsbl.net.au
+  osrs.dnsbl.net.au
+  relays.nether.net
+  relays.bl.gweep.ca
+  smtp.dnsbl.sorbs.net
+  relays.bl.kundenserver.de
+  dialups.mail-abuse.org
+  rdts.dnsbl.net.au
+  spam.dnsbl.sorbs.net
+  dynablock.sorbs.net
+  dynip.rothen.com
+  dul.blackhole.cantv.net
+  cdl.anti-spam.org.cn
+  short.rbl.jp
+  korea.services.net
+  mail.people.it
+  blacklist.sci.kun.nl
+  all.spamblock.unit.liu.se
+  /;
+
+my @white_list = read_file('/etc/dnsblwhitelist') if -f '/etc/dnsblwhitelist';
+chomp @white_list;
+my $hostname = hostname;
+my $addr = gethostbyname($hostname) or die "Can't resolve $hostname: $!\n";
+my $IP   = inet_ntoa($addr);
+my $reverse_IP = join( '.', reverse split( /\./, $IP ) );
+
+my $res = Net::DNS::Resolver->new;
+
+for my $rbl (@rbls) {
+    next if grep /$rbl/, @white_list;
+    my $packet = $res->query( "$reverse_IP.$rbl" );
+    next if !$packet;
+    my ($answer) = $packet->answer;
+    my $result = "$rbl: " . $answer->rdatastr;
+
+    # get some description from txt record if avaliable
+    $packet = $res->query( "$reverse_IP.$rbl", "TXT" );
+    if ($packet) {
+        ($answer) = $packet->answer;
+        $result .= " - " . $answer->rdatastr;
+    }
+    push @incidents, $result;
+}
+
+if (@incidents) {
+    say join( "\n", @incidents );
+    exit CRITICAL;
+}
+
+say "OK - not listed";

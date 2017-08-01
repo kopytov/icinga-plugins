@@ -1,0 +1,97 @@
+#!/usr/bin/env perl
+
+use extreme;
+use English;
+use POSIX 'strftime';
+use Date::Parse 'str2time';
+use Getopt::Long qw(:config no_ignore_case);
+
+my (
+    $file,     $math,      $help,  $warntime, $warncount,
+    $crittime, $critcount, $state, $message,
+);
+
+my %E_STATE = (
+    'OK'       => 0,
+    'WARNING'  => 1,
+    'CRITICAL' => 2,
+    'UNKNOWN'  => 3
+);
+
+# usage
+my $USAGE = <<"END_USAGE";
+Usage: check_brutforce [OPTION]...
+END_USAGE
+
+# help
+my $HELP = <<'END_HELP';
+
+GENERAL OPTIONS:
+
+   --file           Log file for find math
+   --math           String for search
+   --warntime       Time in minutes for which count number of matches for WARN status
+   --warncount      Count matches for WARN status
+   --crittime       Time in minutes for which count number of matches for CRIT status
+   --critcount      Count matches for CRIT status
+   --help           Print help
+
+END_HELP
+
+GetOptions(
+    'file=s'      => \$file,
+    'math=s'      => \$math,
+    'warntime=i'  => \$warntime,
+    'warncount=i' => \$warncount,
+    'crittime=i'  => \$crittime,
+    'critcount=i' => \$critcount,
+    'help'        => \$help,
+);
+
+# print help
+if ($help) {
+    print $USAGE, $HELP;
+    exit $E_STATE{'UNKNOWN'};
+}
+
+#test file exists
+my $tf = `sudo test -f $file`;
+if ($?) {
+    print "File for parse not exists\n";
+    exit $E_STATE{'UNKNOWN'};
+}
+
+sub log_parse ( $file, $count ) {
+    my $matched = `sudo /bin/grep -c "$math" $file`;
+    chop $matched;
+    if ( $matched < $count ) {
+        say $message;
+        exit $state;
+    }
+    my $first_date
+      = `sudo /bin/grep "$math" $file | /usr/bin/tail -n $count | /usr/bin/head -1 | /usr/bin/awk '{print \$4}' | /usr/bin/cut -d[ -f 2`;
+    my $log_date = str2time($first_date);
+    return $log_date;
+}
+
+$message = 'OK';
+$state   = $E_STATE{'OK'};
+
+my $current_date = strftime( '%s', localtime );
+
+if ( ( $crittime * 60 ) > ( $current_date - log_parse( $file, $critcount ) ) )
+{
+    $message
+      = "CRITICAL: In last $crittime minutes there were more than $critcount requests to $math";
+    $state = $E_STATE{'CRITICAL'};
+}
+elsif (
+    ( $warntime * 60 ) > ( $current_date - log_parse( $file, $warncount ) ) )
+{
+    $message
+      = "WARNING: In last $warntime minutes there were more than $warncount requests to $math";
+    $state = $E_STATE{'WARNING'};
+}
+
+say $message;
+exit $state;

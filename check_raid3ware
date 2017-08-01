@@ -1,0 +1,125 @@
+#!/usr/bin/perl
+
+# A simple Nagios plugin to monitor the status of a RAID array on a 3ware RAID
+# card, using the 3ware tw_cli utility (downloadable from 3ware's site)
+#
+# For new versions, check GitHub:
+# https://github.com/bigpresh/misc-scripts/tree/master/nagios_3ware_raid_check
+#
+# David Precious <davidp@preshweb.co.uk>
+#
+# Released under the WTFPL licence, see http://sam.zoy.org/wtfpl/ for terms.
+#
+# You'll need to allow the user that the Nagios NRPE daemon runs as to execute
+# the tw_cli command as root via sudo.
+# e.g., add the following to sudoers :
+# nagios  ALL=  NOPASSWD: /usr/local/bin/tw_cli
+
+use strict;
+use Nagios::Plugin;
+use FileHandle;
+
+my $np = Nagios::Plugin->new(
+    shortname => "RAIDCHECK",
+    usage => "%s [--verbose][--tw_cli]",
+);
+
+$np->add_arg(
+    spec => "verbose|v",
+    help => "Print debug information",
+);
+$np->add_arg(
+    spec => "tw_cli|tw-cli|t=s",
+    help => "Path to 3ware/LSI tw_cli binary",
+    default => "tw_cli",
+);
+$np->getopts;
+
+# We want to remember each critical/warning/OK state, then at the end we can
+# exit with the appropriate status.
+my (@critical, @warning, @ok);
+
+# First, find out what controller card(s) we have.
+my $listfh = FileHandle->new('sudo ' . $np->opts->tw_cli . ' show |')
+    or $np->nagios_die("Can't get RAID adapter list via tw_cli command - $!");
+my @lines = $listfh->getlines;
+my @cards = grep { /^c\d+/ } @lines;
+$listfh->close;
+
+if ($np->opts->verbose) {
+    print "Result of `" . $np->opts->tw_cli . " show` command:\n";
+    print @lines;
+}
+
+if (!@cards) {
+    $np->nagios_die("Failed to find any RAID controller cards!");
+}
+
+for my $cardinfo (@cards) {
+    my ($card, $model) = $cardinfo =~ m{^c(\d+) \s+ (\S+) \s+};
+
+    if ($np->opts->verbose) {
+        print "Card $card is a $model\n";
+        print "Fetching details of card $card - executing `"
+            . $np->opts->tw_cli . " info c$card`\n";
+    }
+
+    # Determine the arrays present on this card:
+    my $statusfh = FileHandle->new(
+        'sudo ' . $np->opts->tw_cli . " info c$card |"
+    ) or $np->nagios_die("Can't get RAID status via tw_cli command - $!");
+
+    @lines = $statusfh->getlines;
+    my @arrays = grep { / RAID-\d+ /x } @lines;
+    $statusfh->close;
+
+    if ($np->opts->verbose) {
+        print @lines;
+        print "Identified " . scalar @arrays . " arrays:\n";
+        print @arrays;
+    }
+
+    for my $arrayinfo (@arrays) {
+
+        my ($unit, $type, $status, $completion, $completion2, $size) =
+            $arrayinfo =~ m{^
+                (u\d+) \s+       # Logical unit (array)
+                (RAID-\d+) \s+   # RAID type
+                (\S+) \s+        # Status
+                (\S+) \s+        # Completion percentage or -
+                (\S+) \s+        # Completion percentage or -
+                \S+ \s+          # Stripe (don't care)
+                (\S+)            # Size
+            }x
+            or $np->nagios_die("Failed to parse output of tw_cli: [$arrayinfo]");
+
+        $size = int $size;
+
+        print "Unit $unit on card$card is a $type array of $size GB"
+            . " and is $status\n"
+            if $np->opts->verbose;
+
+
+        my $statusnum;
+        if ($status =~ /OK|VERIFYING/) {
+            push @ok, "Card $card unit $unit $type $status (${size}GB)";
+        } elsif ($status =~ /REBUILDING|INITIALIZING/) {
+            # There are two percentage columns, I'm not entirely sure which is used in
+            # which situation
+            my $complete = $completion eq '-' ? $completion2 : $completion;
+            push @warning, "Card $card unit $unit $type $status $complete";
+        } else {
+            push @critical, "Card $card unit $unit - RAID status $status";
+        }
+    }
+}
+
+
+# OK, now, exit with the most-critical status(es):
+if (@critical) {
+    $np->nagios_exit(CRITICAL, join ", ", @critical);
+} elsif (@warning) {
+    $np->nagios_exit(WARNING, join ", ", @warning);
+} else {
+    $np->nagios_exit(OK, join ", ", @ok);
+}

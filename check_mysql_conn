@@ -1,0 +1,162 @@
+#!/usr/bin/perl -w
+
+use strict;
+use Getopt::Std;
+use lib "/usr/lib64/nagios/plugins";
+use utils qw(%ERRORS);
+
+use vars qw/ %opt /;
+sub debug($);
+
+getopts('c:dhH:Lp:P:S:u:w:V', \%opt);
+
+if (exists $opt{h}) {
+    usage();
+    exit(0);
+}
+
+if (exists $opt{V}) {
+    print '$Id: check_mysql_conn.pl 572 2009-06-13 19:09:45Z root $', "\n";
+    exit(0);
+}
+
+if (exists $opt{L}) {
+    print << "EOF";
+Copyright (C) 2008-2009 Ralf G. R. Bergs
+
+Thanks for bugfixes and feature updates to Ian K. and Bernd
+Stroessenreuther.
+
+This program is free software; you can redistribute it and/or modify
+it under the terms of the GNU General Public License as published by
+the Free Software Foundation; either version 3 of the License, or (at
+your option) any later version.
+
+This program is distributed in the hope that it will be useful, but
+WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU
+General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, see <http://www.gnu.org/licenses/>.
+EOF
+    exit(0);
+}
+
+my $debug = 0;
+if (exists $opt{d}) {
+    print "Enabling debug mode...\n";
+    $debug = 1;
+}
+
+my $warn_threshold = 5;
+if (exists $opt{w}) {
+    $warn_threshold = $opt{w};
+}
+debug("\$warn_threshold=$warn_threshold\n");
+
+my $critical_threshold = 10;
+if (exists $opt{c}) {
+    $critical_threshold = $opt{c};
+}
+debug("\$critical_threshold=$critical_threshold\n");
+
+my $username = "root";
+if (exists $opt{u}) {
+    $username = $opt{u};
+}
+
+my $password = "root";
+if (exists $opt{p}) {
+    $password = $opt{p};
+}
+
+my $host = "127.0.0.1";
+if (exists $opt{H}) {
+	$host = $opt{H};
+}
+
+my $port = 3306;
+if (exists $opt{P}) {
+	$port = $opt{P};
+}
+
+my $socket = "";
+if (exists $opt{S}) {
+	$socket = $opt{S};
+}
+
+my $cmdline = "/usr/bin/mysql -u $username";
+if (exists $opt{p}) {
+        $cmdline = "$cmdline -p$password";
+    }
+if ($socket eq "") {
+	$cmdline = "$cmdline -h $host -P $port";
+} else {
+	$cmdline = "$cmdline -S $socket";
+}
+
+debug("\$cmdline=\"$cmdline\"\n");
+my $query_output = `/bin/echo "SHOW GLOBAL STATUS LIKE 'Threads_connected';" \| $cmdline 2>/dev/null \| /bin/grep "Threads_connected"`;
+debug("\$query_output=\"$query_output\"\n");
+unless ($query_output =~ /^Threads_connected\s+(\d+)\s+$/) {
+    print "Unknown: Unable to read output from MySQL\n";
+    exit $ERRORS{'UNKNOWN'};
+}
+
+my $threads_connected = $1;
+debug("\$threads_connected=$threads_connected\n");
+
+my $perfdata = "mysql_connections=$threads_connected;$warn_threshold;$critical_threshold;0;0;";
+
+if ($threads_connected > $critical_threshold) {
+    print "Critical: $threads_connected active connections|$perfdata\n";
+    exit $ERRORS{'CRITICAL'}
+} elsif ($threads_connected > $warn_threshold) {
+    print "Warning: $threads_connected active connections|$perfdata\n";
+    exit $ERRORS{'WARNING'}
+} else {
+    print "OK: $threads_connected active connections|$perfdata\n";
+    exit $ERRORS{'OK'}
+}
+
+
+
+###########################################################################
+
+sub usage {
+    if (@_ == 1) {
+	print "$0: $_[0].\n";
+    }
+    print << "EOF";
+Usage: $0 [options]
+  -w THRESHOLD
+     Warning threshold for number of active connections (default: 5)
+  -c THRESHOLD
+     critical threshold for number of active connections (default: 10)
+  -H HOST
+  	 Connect to TCP address/DNS name (default: 127.0.0.1).
+  -P PORT
+  	 Use this alternate TCP port (default: 3306).
+  -S SOCKET
+  	 Use this MySQL socket instead of the default/or TCPIP.
+  -u USERNAME
+     The MySQL username to use when connecting to the server.
+  -p PASSWORD
+     The password to use when connecting to the server.
+  -d
+     enable debug mode (mutually exclusive to -q)
+  -h
+     display usage information
+  -L
+     display license
+  -V
+     display version number      
+EOF
+}
+
+sub debug($) {
+    if ($debug) {
+	print STDERR $_[0];
+    }
+}

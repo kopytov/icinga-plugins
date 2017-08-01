@@ -1,0 +1,121 @@
+#!/usr/bin/env bash
+# Author: Jon Schipp <jonschipp@gmail.com, jschipp@illinois.edu>
+# Nagios Exit Codes
+OK=0
+WARNING=1
+CRITICAL=2
+UNKNOWN=3
+
+usage()
+{
+cat <<EOF
+
+Check the number of connections/sockets in a given state.
+Uses iproute2's ss tool to retrieve connections.
+
+  Options:
+    -s        State of connection (def: all)
+              (established, syn-sent, syn-recv, fin-wait-1, fin-wait-2, time-wait,
+                   closed, close-wait, last-ack, listen, and closing)
+    -f           Apply quoted ss expression filter e.g. '( dst 192.168.1/24 and dport >= :1024 )'
+    -p <type> Set protocol or family type (udp/tcp/inet/inet6)
+    -c        Critical threshold as an integer
+    -w        Warning threshold as an integer
+    -e        Exact count mode (raise CRITICAL if connection != critical, warn is ignored)
+
+Usage: $0 -s established '( sport = :443 )' -w 800 -c 1000
+EOF
+}
+
+argcheck() {
+# if less than n argument
+if [ $ARGC -lt $1 ]; then
+  echo "Missing arguments! Use \`\`-h'' for help."
+  exit 1
+fi
+}
+
+if ! command -v ss >/dev/null 2>&1; then
+  echo -e "ERROR: ss is not installed or not found in \$PATH!"
+  exit 1
+fi
+
+# Define now to prevent expected number errors
+STATE=all
+CRIT=100
+WARN=50
+COUNT=0
+ARGC=$#
+CHECK=0
+EXACT=0
+
+argcheck 1
+
+while getopts "hc:s:f:p:w:e" OPTION
+do
+  case $OPTION in
+    h)
+      usage
+      exit 1
+      ;;
+    s)
+      STATE="$OPTARG"
+      CHECK=1
+      ;;
+    f)
+      FILTER="$OPTARG"
+      CHECK=1
+      ;;
+    p)
+      PROTOCOL="-A $OPTARG"
+      CHECK=1
+      ;;
+    c)
+      CRIT="$OPTARG"
+      CHECK=1
+      ;;
+    w)
+      WARN="$OPTARG"
+      CHECK=1
+      ;;
+    e)
+      EXACT=1
+      ;;
+    \?)
+      exit 1
+      ;;
+  esac
+done
+
+COUNT=$(ss -n state $STATE $PROTOCOL $FILTER | grep -v 'State\|-Q' | wc -l)
+EST=$(ss -n state established $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+LIST=$(ss -n state listening $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+SYNS=$(ss -n state syn-sent $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+SYNR=$(ss -n state syn-recv $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+LASTA=$(ss -n state last-ack $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+CLOSEW=$(ss -n state close-wait $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+TIMEW=$(ss -n state time-wait $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+CLOSED=$(ss -n state closed $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+CLOSING=$(ss -n state closing $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+FINW1=$(ss -n state fin-wait-1 $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+FINW2=$(ss -n state fin-wait-2 $PROTOCOL | grep -v 'State\|-Q' | wc -l)
+
+if [ $EXACT -eq 1 ]; then
+
+  echo "$COUNT sockets in $STATE state"
+  if [ $COUNT -ne $CRIT ]; then
+    exit $CRITICAL
+  else
+    exit $OK
+  fi
+
+elif [ $COUNT -gt $CRIT ]; then
+  echo "CRITICAL - $COUNT sockets in $STATE state! | connections=$COUNT;$WARN;$CRIT ESTABLISHED=$EST;;;; LISTEN=$LIST;;;; SYN_SENT=$SYNS;;;; SYN_RECV=$SYNR;;;; LAST_ACK=$LASTA;;;; CLOSE_WAIT=$CLOSEW;;;; TIME_WAIT=$TIMEW;;;; CLOSED=$CLOSED;;;; CLOSING=$CLOSING;;;; FIN_WAIT1=$FINW1;;;; FIN_WAIT2=$FINW2;;;;"
+  exit $CRITICAL
+elif [ $COUNT -gt $WARN ]; then
+  echo "WARNING - $COUNT sockets in $STATE state! | connections=$COUNT;$WARN;$CRIT ESTABLISHED=$EST;;;; LISTEN=$LIST;;;; SYN_SENT=$SYNS;;;; SYN_RECV=$SYNR;;;; LAST_ACK=$LASTA;;;; CLOSE_WAIT=$CLOSEW;;;; TIME_WAIT=$TIMEW;;;; CLOSED=$CLOSED;;;; CLOSING=$CLOSING;;;; FIN_WAIT1=$FINW1;;;; FIN_WAIT2=$FINW2;;;;"
+  exit $WARNING
+else
+  echo "OK - $COUNT sockets in $STATE state. | connections=$COUNT;$WARN;$CRIT ESTABLISHED=$EST;;;; LISTEN=$LIST;;;; SYN_SENT=$SYNS;;;; SYN_RECV=$SYNR;;;; LAST_ACK=$LASTA;;;; CLOSE_WAIT=$CLOSEW;;;; TIME_WAIT=$TIMEW;;;; CLOSED=$CLOSED;;;; CLOSING=$CLOSING;;;; FIN_WAIT1=$FINW1;;;; FIN_WAIT2=$FINW2;;;;"
+  exit $OK
+fi

@@ -1,0 +1,47 @@
+#!/usr/bin/env perl
+
+my $ARCCONF = '/usr/sbin/arcconf';
+my @INFO    = `sudo $ARCCONF getconfig 1`;
+
+if ( !@INFO || $? ) {
+    print "Can't get info from arcconf\n";
+    exit 3;
+}
+
+my ($CONTROLLER) = map {/:\s(.*)/} grep /Controller Status/i,        @INFO;
+my ($BATTERY)    = map {/:\s(.*)/} grep /^\s+Status/i,               @INFO;
+my ($LD)         = map {/:\s(.*)/} grep /Status of logical device/i, @INFO;
+my @PD_INFO = grep /Device #|  Serial|  State|S.M.A.R.T/i, @INFO;
+my ( %PD, @warnings, $num );
+
+push @warnings, "Controller: $CONTROLLER" if $CONTROLLER !~ /^Optimal|^OK/i;
+push @warnings, "Battery: $BATTERY"       if $BATTERY !~ /Optimal|Charging/i;
+push @warnings, "LD: $LD"                 if $LD !~ /^Optimal/i;
+
+for my $line (@PD_INFO) {
+    $num = $1 if $line =~ m{Device #(\d+)};
+
+    if ( $line =~ /State\s+:\s(.*)/i ) {
+        $PD{$num}{state} = $1;
+    }
+    if ( $line =~ /Serial number\s+:\s(.*)/i ) {
+        $PD{$num}{serial} = $1;
+    }
+    if ( $line =~ /S.M.A.R.T.\s+:\s(.*)/i ) {
+        $PD{$num}{smart} = $1;
+    }
+    if ( $line =~ /S.M.A.R.T. warnings\s+:\s(.*)/i ) {
+        $PD{$num}{smart_count} = $1;
+        if (   $PD{$num}{smart} =~ /Yes/i
+            || $PD{$num}{state} !~ /^Online|^Global/i )
+        {
+            push @warnings,
+              "Warning: disk in slot $num in state $PD{$num}{state}; Smart warnings $PD{$num}{smart_count}; Serial: $PD{$num}{serial}";
+        }
+    }
+}
+
+print join "\n", @warnings;
+
+exit 1 if @warnings;
+print "aacraid OK\n";

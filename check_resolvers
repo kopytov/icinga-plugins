@@ -1,0 +1,13 @@
+#!/bin/bash
+
+exit_code=0
+host=`host google.com 2>/dev/null | grep 'connection timed out'`
+
+if [ -n "$host" ]; then
+    echo $host
+    exit_code=1
+else
+echo resolvers OK
+fi
+
+exit $exit_code
