@@ -30,9 +30,11 @@ GENERAL OPTIONS:
 
    --file           Log file for find math
    --math           String for search
-   --warntime       Time in minutes for which count number of matches for WARN status
+   --warntime       Time in minutes for which count number of matches for WARN
+status
    --warncount      Count matches for WARN status
-   --crittime       Time in minutes for which count number of matches for CRIT status
+   --crittime       Time in minutes for which count number of matches for CRIT
+status
    --critcount      Count matches for CRIT status
    --help           Print help
 
@@ -68,8 +70,9 @@ sub log_parse ( $file, $count ) {
         say $message;
         exit $state;
     }
-    my $first_date
-      = `sudo /bin/grep "$math" $file | /usr/bin/tail -n $count | /usr/bin/head -1 | /usr/bin/awk '{print \$4}' | /usr/bin/cut -d[ -f 2`;
+    my @records = `sudo /bin/grep "$math" $file | /usr/bin/tail -n $count`;
+    my $first_date = $1 if $records[0] =~ /\[(.*)\s\+[0-9]+\]/;
+    exit 1 if !$first_date;
     my $log_date = str2time($first_date);
     return $log_date;
 }
