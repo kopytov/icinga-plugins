@@ -6,6 +6,7 @@ use File::Slurp;
 use Net::DNS;
 
 my @incidents;
+my @reverse_IPs;
 
 use constant {
     OK       => 0,
@@ -85,27 +86,38 @@ my @rbls = qw/
 
 my @white_list = read_file('/etc/dnsblwhitelist') if -f '/etc/dnsblwhitelist';
 chomp @white_list;
-my $hostname = hostname;
-my $addr = gethostbyname($hostname) or die "Can't resolve $hostname: $!\n";
-my $IP   = inet_ntoa($addr);
-my $reverse_IP = join( '.', reverse split( /\./, $IP ) );
+
+# get list of ips
+my $get_ip
+  = '/sbin/ip -4 -o addr | /bin/awk \'!/^[0-9]*: ?lo|link\/ether/ {gsub("/", " "); print $4}\' | grep -v \'^10\.\'';
+my @IPs = `$get_ip`;
+chomp(@IPs);
+
+# get reverse ips
+for my $IP (@IPs) {
+    my $reverse_ip = join( '.', reverse split( /\./, $IP ) );
+    push @reverse_IPs, $reverse_ip;
+}
+chomp(@reverse_IPs);
 
 my $res = Net::DNS::Resolver->new;
 
 for my $rbl (@rbls) {
     next if grep /$rbl/, @white_list;
-    my $packet = $res->query( "$reverse_IP.$rbl" );
-    next if !$packet;
-    my ($answer) = $packet->answer;
-    my $result = "$rbl: " . $answer->rdatastr;
+    for my $reverse_IP (@reverse_IPs) {
+        my $packet = $res->query("$reverse_IP.$rbl");
+        next if !$packet;
+        my ($answer) = $packet->answer;
+        my $result = "$rbl: " . $answer->rdatastr;
 
-    # get some description from txt record if avaliable
-    $packet = $res->query( "$reverse_IP.$rbl", "TXT" );
-    if ($packet) {
-        ($answer) = $packet->answer;
-        $result .= " - " . $answer->rdatastr;
+        # get some description from txt record if avaliable
+        $packet = $res->query( "$reverse_IP.$rbl", "TXT" );
+        if ($packet) {
+            ($answer) = $packet->answer;
+            $result .= " - " . $answer->rdatastr;
+        }
+        push @incidents, $result;
     }
-    push @incidents, $result;
 }
 
 if (@incidents) {
