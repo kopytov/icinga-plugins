@@ -35,11 +35,12 @@ if ( $interface eq 'all' ) {
 
     # if bonding not found select all interfaces in up state
     @interfaces
-      = map { basename $_ } grep {`grep -i up $_/operstate`} @all_interfaces
+      = map { basename $_ }
+      grep { !-d "$_/bridge" && `grep -i up $_/operstate` } @all_interfaces
       if !@interfaces;
 }
 else {
-    @interfaces = $interface;
+    @interfaces = split( / /, $interface );
 }
 
 my %data;
@@ -70,7 +71,7 @@ for my $i ( keys %data ) {
     my $out_mbits = sprintf( "%.2f", $out_bits / 1000000 );
     $output .= "${i}_in=$in_mbits Mbit/s, ${i}_out=$out_mbits Mbit/s; ";
     $perfdata
-      .= "${i}_in_bits=$in_bits;;;;$iface_speed_bits ${i}_out_bits=$out_bits;;;;$iface_speed_bits ";
+      .= "${i}_in=$in_bits;;;;$iface_speed_bits ${i}_out=$out_bits;;;;$iface_speed_bits ";
 }
 
 if ( !$output ) {
