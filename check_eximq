@@ -2,9 +2,13 @@
 use Getopt::Long;
 
 my ( $opt_h, $opt_w, $opt_c, $opt_t, $status, $state, $msg );
-my $msg_count         = 0;
-my $path_to_exim = '/usr/sbin/exim';
-my $timeout       = 15;
+my $msg_count    = 0;
+my $path_to_exim = `which exim`;
+chop $path_to_exim;
+my $path_to_sudo = `which sudo`;
+chop $path_to_sudo;
+$path_to_sudo //= '';
+my $timeout = 15;
 my %ERRORS = ( 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'UNKNOWN' => 3 );
 
 $status = process_arguments();
@@ -20,7 +24,7 @@ $SIG{'ALRM'} = sub {
 alarm($opt_t);
 
 if ( defined $path_to_exim && -x $path_to_exim ) {
-    $msg_count = `sudo $path_to_exim -bpc`;
+    $msg_count = `$path_to_sudo $path_to_exim -bpc`;
 }
 else {
     print "Check permissions and path to exim\n";
@@ -90,11 +94,10 @@ sub process_arguments() {
 sub print_help () {
     my $help_text = <<'END';
 Usage: %s -w <warn> -c <crit> [-t <timeout>]
-    
+
 Checks the number of messages in the mail queue for EXIM mta
   -w (--warning)   = Min. number of messages in queue to generate warning
-  -c (--critical)  = Min. number of messages in queue to generate critical
-alert ( w < c )
+  -c (--critical)  = Min. number of messages in queue to generate critical alert ( w < c )
   -t (--timeout)   = Plugin timeout in seconds (default = %s)
   -h (--help)
 END
