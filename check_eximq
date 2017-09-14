@@ -40,16 +40,19 @@ if ($?) {
 
 chomp $msg_count;
 
+
+my $perfdata = " | count=$msg_count;$opt_w;$opt_c;;";
+
 if ( $msg_count < $opt_w ) {
-    $msg   = "OK: mailq ($msg_count) is below threshold ($opt_w/$opt_c)";
+    $msg   = "OK: mailq ($msg_count) is below threshold ($opt_w/$opt_c) $perfdata";
     $state = $ERRORS{'OK'};
 }
 elsif ( $msg_count >= $opt_w && $msg_count < $opt_c ) {
-    $msg   = "WARNING: mailq is $msg_count (threshold w = $opt_w)";
+    $msg   = "WARNING: mailq is $msg_count (threshold w = $opt_w) $perfdata";
     $state = $ERRORS{'WARNING'};
 }
 else {
-    $msg   = "CRITICAL: mailq is $msg_count (threshold c = $opt_c)";
+    $msg   = "CRITICAL: mailq is $msg_count (threshold c = $opt_c) $perfdata";
     $state = $ERRORS{'CRITICAL'};
 }
 
