@@ -1,0 +1,38 @@
+#!/usr/bin/env perl
+use warnings;
+use autodie;
+use Carp;
+use Getopt::Long;
+
+sub usage {
+    print <<"END_USAGE";
+Usage:
+    $0 [ options ]
+
+Options:
+    --container   - container name within to execute plugin
+    --plugin      - plugin name to execute
+    --plugin_path - plugin prefix path withour slashes ( default base )
+    --params      - params sends to plugin
+END_USAGE
+    exit 1;
+}
+
+my ( $interface, $interval );
+GetOptions(
+    'container=s'   => \$container,
+    'plugin=s'      => \$plugin,
+    'plugin_path=s' => \$prefix,
+    'params=s'      => \$params,
+) || usage;
+
+$params //= '';
+croak "need to specify container within to execute plugin" if !$container;
+croak "specified container not exists" if !`docker inspect $container`;
+croak "need to specify plugin to execute" if !$plugin;
+
+$prefix //='base';
+my $plugin_path = "/usr/lib64/nagios/plugins/$prefix/check_$plugin";
+croak "specified plugin not found at $plugin_path" if !-f $plugin_path;
+
+system("docker exec $container $plugin_path $params");
