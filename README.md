@@ -44,4 +44,6 @@ check_md_raid - check software raids
 
 check_snapshots - check created openvz snapshots plugin;
 
-check_mailq - mailq from nagios plugins with fixed path to sudo
+check_mailq_custom - mailq from nagios plugins with fixed path to sudo
+
+check_drdb - check drdb state
