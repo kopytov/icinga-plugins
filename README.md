@@ -47,3 +47,6 @@ check_snapshots - check created openvz snapshots plugin;
 check_mailq_custom - mailq from nagios plugins with fixed path to sudo
 
 check_drdb - check drdb state
+
+check_diskstat - check IO stats of hard drive
+https://exchange.nagios.org/directory/Plugins/Operating-Systems/Linux/Check-IO-stats-of-one-or-all-disks/details
