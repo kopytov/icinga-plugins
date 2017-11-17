@@ -127,7 +127,7 @@ EXITCODE=$E_OK
 
 RESULT+=$(echo "${OUTPUT} ${DEVICE} $TPS io/s, read ${DEVICE} $SECTORS_READ sectors (${KBYTES_READ_PER_SEC}kB/s), write ${DEVICE} $SECTORS_WRITE sectors (${KBYTES_WRITTEN_PER_SEC}kB/s) in $TIME seconds")
 
-PERFDATA+=$(echo "${DEVICE}_tps=${TPS};;; ${DEVICE}_read=${BYTES_READ_PER_SEC};;; ${DEVICE}_write=${BYTES_WRITTEN_PER_SEC};;;")
+PERFDATA+=$(echo "${DEVICE}_tps=${TPS};;; ${DEVICE}_read=${BYTES_READ_PER_SEC};;; ${DEVICE}_write=${BYTES_WRITTEN_PER_SEC};;; ")
 fi
 done
 echo "$RESULT | $PERFDATA"
