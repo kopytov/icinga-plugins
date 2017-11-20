@@ -91,7 +91,7 @@ if [ $? -ne 0 ]; then
 	echo "Cannot read histfile $HISTFILE..."
 	exit $E_UNKNOWN
 fi
-OLDDISKSTAT_TIME=$(stat $HISTFILE | grep Modify | sed 's/^.*: \(.*\)$/\1/')
+OLDDISKSTAT_TIME=$(stat -c %y $HISTFILE)
 OLDDISKSTAT_EPOCH=$(date -d "$OLDDISKSTAT_TIME" +%s)
 NEWDISKSTAT_EPOCH=$(date +%s)
 
