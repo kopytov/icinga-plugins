@@ -1,0 +1,22 @@
+#!/usr/bin/env perl
+use extreme;
+
+my $exit_status = 0;
+my ($user,$limit,$used);
+
+my $isp5 = 1 if -d '/usr/local/mgr5';
+
+my @users_data = $isp5 ? `sudo /usr/local/mgr5/sbin/mgrctl -m ispmgr user` : `sudo /usr/local/ispmgr/sbin/mgrctl -m ispmgr user` ;
+chomp @users_data;
+
+for my $line (@users_data) {
+    ($user,$limit,$used) = $line =~ / name=([^\s]*) .* traff_total=([^\s]*) .* traff_used=([^\s]*) /x if $isp5;
+    ($user,$used,$limit) = $line =~ / name=([^\s]*) .* bandwidth=([^\/]*)\/([^\s]*) /x if !$isp5;
+    if ($used > $limit) {
+        my $overhead = ($used-$limit)/1024;
+        printf("$user used over limit: %.02f GB\tlimit: %.02f GB\n", $overhead, $limit/1024);
+        $exit_status=2;
+    }
+}
+
+exit $exit_status;
