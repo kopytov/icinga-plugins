@@ -6,7 +6,7 @@ my ($user,$limit,$used);
 
 my $isp5 = 1 if -d '/usr/local/mgr5';
 
-my @users_data = $isp5 ? `sudo /usr/local/mgr5/sbin/mgrctl -m ispmgr user` : `sudo /usr/local/ispmgr/sbin/mgrctl -m ispmgr user` ;
+my @users_data = $isp5 ? `sudo /usr/local/mgr5/sbin/mgrctl -m ispmgr user | grep -v "active=off"` : `sudo /usr/local/ispmgr/sbin/mgrctl -m ispmgr user | grep -v disabled`;
 chomp @users_data;
 
 for my $line (@users_data) {
