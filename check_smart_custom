@@ -13,7 +13,7 @@ my %E_STATE = (
     'CRITICAL' => 2,
     'UNKNOWN'  => 3,
 );
-my ( $type, $drives, $sudo, $verbose, $help, $device, $devmath );
+my ( $type, $drives, $sudo, $verbose, $help, $device, $devmath, $temp );
 GetOptions(
     'device=s'   => \$device,
     'devmath=s'  => \$devmath,
@@ -22,6 +22,7 @@ GetOptions(
     's|sudo'     => \$sudo,
     'p|path=s'   => \$path,
     'h|help'     => \$help,
+    'temp'       => \$temp,
 );
 
 pod2usage( -verbose => 2 )
@@ -61,6 +62,10 @@ Set path to smartctl. Default /usr/sbin/smartctl
 =item B<--sudo> or B<-s>
 
 Use sudo for smartctl command or need run script as root
+
+=item B<--temp>
+
+print only status string and temperature data
 
 =item B<--help> or B<-h>
 
@@ -128,6 +133,7 @@ if ( !defined $devices[0] ) {
 my $exit_status       = 'OK';
 my $exit_status_local = 'OK';
 my $status_string     = '';
+my $perfdata_string   = '';
 
 sub return_status {
     my $request_status = shift;
@@ -146,18 +152,21 @@ for my $dev (@devices) {
     my @error_messages = qw//;
     $exit_status_local = 'OK';
     my (
-        $label,              $smart_overall_state,
-        $smart_silent_check, $smart_detailed_state
+        $label,              , $perfdata_label,
+        $smart_overall_state , $smart_silent_check,
+        $smart_detailed_state,
     );
 
     if ( defined $drives ) {
         $label                = "$device: $type,$dev - ";
+        $perfdata_label       = "$device,$dev";
         $smart_overall_state  = "$path -d $type,$dev -H $device";
         $smart_silent_check   = "$path -d $type,$dev -q silent -A $device";
         $smart_detailed_state = "$path -d $type,$dev -A $device";
     }
     else {
         $label                = "$dev: $type - ";
+        $perfdata_label       = "$dev";
         $smart_overall_state  = "$path -d $type -H $dev";
         $smart_silent_check   = "$path -d $type -q silent -A $dev";
         $smart_detailed_state = "$path -d $type -A $dev";
@@ -258,6 +267,11 @@ for my $dev (@devices) {
             # skip some attributes
             next if ( grep { $_ eq $attribute_name } ('Power_On_Minutes') );
 
+
+            if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/ ){
+                $perfdata_string .= "$perfdata_label" .'_temp='. sprintf("%d", $raw_value) .';;;; ';
+            }
+
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
                     "Attribute $attribute_name failed at $when_failed" );
@@ -299,6 +313,9 @@ for my $dev (@devices) {
                     return_status('OK');
                 }
             }
+            if ( $current_temperature ){
+                $perfdata_string .= "$perfdata_label" .'_temp='. sprintf("%d", $current_temperature) .';;;; ';
+            }
             if (   ( $current_temperature && $max_temperature )
                 && ( $current_temperature >= $max_temperature ) )
             {
@@ -329,7 +346,9 @@ for my $dev (@devices) {
     }
 }
 
-print "$exit_status: \n$status_string\n";
+print "$exit_status";
+print ": \n$status_string" if !$temp;
+print "|$perfdata_string\n";
 exit $E_STATE{$exit_status};
 
 1;
