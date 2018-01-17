@@ -13,7 +13,7 @@ my %E_STATE = (
     'CRITICAL' => 2,
     'UNKNOWN'  => 3,
 );
-my ( $type, $drives, $sudo, $verbose, $help, $device, $devmath, $temp );
+my ( $type, $drives, $sudo, $verbose, $help, $device, $devmath, $temp, $raid );
 GetOptions(
     'device=s'   => \$device,
     'devmath=s'  => \$devmath,
@@ -22,14 +22,15 @@ GetOptions(
     's|sudo'     => \$sudo,
     'p|path=s'   => \$path,
     'h|help'     => \$help,
+    'r|raid=s'   => \$raid,
     'temp'       => \$temp,
 );
 
 pod2usage( -verbose => 2 )
   if $help;
 pod2usage(1)
-  if !defined $type
-  or !defined( $device or $devmath );
+  if !defined $raid and ( !defined $type
+     or !defined( $device or $devmath ));
 
 =head1 SYNOPSIS
 
@@ -67,6 +68,12 @@ Use sudo for smartctl command or need run script as root
 
 print only status string and temperature data
 
+=item B<--raid> or B<-r>
+
+autodetected all disks connected to raid controller. Example --raid perc
+
+Now support only perc raid controllers.
+
 =item B<--help> or B<-h>
 
 this help information
@@ -83,9 +90,14 @@ MegaRaid: check_smart -t sat+megaraid --drives 6-9 --device /dev/sda
 
 Perc:
 
-  sas: check_smart --device /dev/sda --type megaraid --drives 6,7
+  sas: check_smart_custom --device /dev/sda --type megaraid --drives 6,7
 
-  ssd: check_smart --device /dev/sda --type sat+megaraid --drives 1-5
+  ssd: check_smart_custom --device /dev/sda --type sat+megaraid --drives 1-5
+
+  Autodetect all perc disks
+    check_smart_custom --raid perc
+
+    Required installed omreport util and started srvadmin-services.sh
 
 =cut
 
@@ -99,35 +111,94 @@ if ( !-X $path ) {
     exit $E_STATE{'UNKNOWN'};
 }
 
-# parse drives or devices
-my @devices;
-if ( defined $drives ) {
-    my @prep_drives = split /,/, $drives;
-    for my $drive (@prep_drives) {
-        push @devices, $drive if $drive =~ m/^\d+$/;
-        push @devices, $1 .. $5
-          if $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/;
-    }
-}
-elsif ( !defined $drives and $device ) {
-    push @devices, $device;
-}
-elsif ($devmath) {
-    my ( $dev_prefix, $dev_premath ) = ( $1, $2 )
-      if $devmath =~ m/(\S+)(\[\S+\]|\(\S+\))/;
-    if ( !$dev_premath ) {
-        print "Device not matched";
-        exit $E_STATE{'UNKNOWN'};
-    }
-    my ( $dev_start, $dev_end ) = ( $1, $5 )
-      if $dev_premath =~ m/\(?\[?(\w+)\s?((\.\.)|(-))\s?(\w+)\]?\)?/;
-    push @devices, "$dev_prefix$_" for $dev_start .. $dev_end;
-}
 
-if ( !defined $devices[0] ) {
+# parse drives or devices
+my %devices;
+if ( $raid && $raid eq 'perc' ){
+    my $omreport = '/opt/dell/srvadmin/bin/omreport';
+    if ( ! -x $omreport ){
+        my $run   = `which omreport`;
+        $omreport = $run if !$?;
+        if (-x $omreport or $?){
+            print "omreport not installed on this server\n";
+            exit $E_STATE{'UNKNOWN'};
+        }
+    }
+    require XML::LibXML;
+    my ($out, $xml);
+    $out = `$omreport storage controller -fmt xml`;
+    $xml = XML::LibXML->new( '1.0', 'UTF-8' );
+    $xml = $xml->load_xml( string => $out );
+    for my $controller ($xml->findnodes('/OMA/Controllers/DCStorageObject/ControllerNum')) {
+        my $c = $controller->textContent;
+        $xml = XML::LibXML->new( '1.0', 'UTF-8' );
+        $out = `$omreport storage vdisk controller=$c -fmt xml`;
+        $xml = $xml->load_xml( string => $out );
+        for my $dev ($xml->findnodes('/OMA/VirtualDisks/DCStorageObject')){
+            next if !$dev->getElementsByTagName('DeviceID');
+            my $devid   = $dev->getElementsByTagName('DeviceID');
+            my $devname = $dev->getElementsByTagName('DeviceName');
+            $xml = XML::LibXML->new( '1.0', 'UTF-8' );
+            $out = `$omreport storage pdisk controller=$c vdisk=$devid -fmt xml`;
+            $xml = $xml->load_xml( string => $out );
+            for my $pd ($xml->findnodes('/OMA/ArrayDisks/DCStorageObject')){
+                my $pdid    = $pd->getElementsByTagName('DeviceID');
+                my $pdproto = $pd->getElementsByTagName('BusProtocol');
+                # 7-sata, 8-sas
+                my $pdtype = "$pdproto" == 7 ? 'sat+megaraid' :
+                             "$pdproto" == 8 ? 'megaraid'     :
+                             die 'disk type not defined';
+
+                $devices{$pdid}{'type'}   = $pdtype;
+                $devices{$pdid}{'device'} = $devname;
+                $drives = 1;
+            }
+        }
+    }
+}
+else {
+    if ( defined $drives ) {
+        my @prep_drives = split /,/, $drives;
+        for my $drive (@prep_drives) {
+            # push @devices, $drive if $drive =~ m/^\d+$/;
+            # push @devices, $1 .. $5
+            #   if $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/;
+            if ( $drive =~ m/^\d+$/ ){
+                $devices{$drive}{'type'}   = $type;
+                $devices{$drive}{'device'} = $device;
+            }
+            elsif( $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/){
+                for ( $1 .. $5 ){
+                    $devices{$_}{'type'}   = $type;
+                    $devices{$_}{'device'} = $device;
+                }
+            };
+        }
+    }
+    elsif ( !defined $drives and $device ) {
+        #push @devices, $device;
+        $devices{$device}{'type'}   = $type;
+        $devices{$device}{'device'} = $device;
+    }
+    elsif ($devmath) {
+        my ( $dev_prefix, $dev_premath ) = ( $1, $2 )
+          if $devmath =~ m/(\S+)(\[\S+\]|\(\S+\))/;
+        if ( !$dev_premath ) {
+            print "Device not matched";
+            exit $E_STATE{'UNKNOWN'};
+        }
+        my ( $dev_start, $dev_end ) = ( $1, $5 )
+          if $dev_premath =~ m/\(?\[?(\w+)\s?((\.\.)|(-))\s?(\w+)\]?\)?/;
+        #push @devices, "$dev_prefix$_" for $dev_start .. $dev_end;
+        $devices{"$dev_prefix$_"}{'type'}   = $type   for $dev_start .. $dev_end;
+        $devices{"$dev_prefix$_"}{'device'} = $device for $dev_start .. $dev_end;
+    }
+}
+if ( !%devices ) {
     print "Device not found\n";
     exit $E_STATE{'UNKNOWN'};
 }
+
 
 # work
 my $exit_status       = 'OK';
@@ -148,7 +219,11 @@ sub return_status {
     $exit_status_local = $request_status;
 }
 
-for my $dev (@devices) {
+
+foreach my $dev ( sort keys %devices ) {
+    my $type   = $devices{$dev}{'type'};
+    my $device = $devices{$dev}{'device'};
+
     my @error_messages = qw//;
     $exit_status_local = 'OK';
     my (
@@ -156,7 +231,6 @@ for my $dev (@devices) {
         $smart_overall_state , $smart_silent_check,
         $smart_detailed_state,
     );
-
     if ( defined $drives ) {
         $label                = "$device: $type,$dev - ";
         $perfdata_label       = "$device,$dev";
@@ -174,7 +248,6 @@ for my $dev (@devices) {
 
     # overall status
     my @result = $sudo ? `sudo $smart_overall_state` : `$smart_overall_state`;
-
     my $output_mode  = "";
     my $found_status = 0;
 
@@ -255,6 +328,8 @@ for my $dev (@devices) {
     @result = $sudo ? `sudo $smart_detailed_state` : `$smart_detailed_state`;
 
     if ( $output_mode =~ "ata" ) {
+        my $reallocated_sector_ct;
+
         foreach my $line (@result) {
             next
               unless $line
@@ -267,17 +342,24 @@ for my $dev (@devices) {
             # skip some attributes
             next if ( grep { $_ eq $attribute_name } ('Power_On_Minutes') );
 
+            # skip Reallocated_Event_Count if Reallocated_Sector_Ct in normal state
+            # 30 magic number
+            $reallocated_sector_ct = $current_value - $thresh_value
+              if ( $attribute_name eq 'Reallocated_Sector_Ct' );
+            next if (
+              $attribute_name eq 'Reallocated_Event_Count' &&
+              $current_value <= $thresh_value &&
+              $reallocated_sector_ct > 30
+            );
 
             if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/ ){
-                $perfdata_string .= "$perfdata_label" .'_temp='. sprintf("%d", $raw_value) .';;;; ';
+                $perfdata_string .= "\'$perfdata_label" .'_temp\'='. sprintf("%d", $raw_value) .';;;; ';
             }
-
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
                     "Attribute $attribute_name failed at $when_failed" );
                 return_status('WARNING');
             }
-
             if ( $current_value <= $thresh_value ) {
                 push( @error_messages,
                     "Attribute $attribute_name failed: value ($current_value) less thresh_value ($thresh_value)"
@@ -314,7 +396,7 @@ for my $dev (@devices) {
                 }
             }
             if ( $current_temperature ){
-                $perfdata_string .= "$perfdata_label" .'_temp='. sprintf("%d", $current_temperature) .';;;; ';
+                $perfdata_string .= "\'$perfdata_label" .'_temp\'='. sprintf("%d", $current_temperature) .';;;; ';
             }
             if (   ( $current_temperature && $max_temperature )
                 && ( $current_temperature >= $max_temperature ) )
