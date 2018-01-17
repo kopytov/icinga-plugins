@@ -126,20 +126,21 @@ if ( $raid && $raid eq 'perc' ){
     }
     require XML::LibXML;
     my ($out, $xml);
-    $out = `$omreport storage controller -fmt xml`;
+    my $cmd_prefix = $sudo ? "sudo $omreport" : "$omreport";
+    $out = `$cmd_prefix storage controller -fmt xml`;
     $xml = XML::LibXML->new( '1.0', 'UTF-8' );
     $xml = $xml->load_xml( string => $out );
     for my $controller ($xml->findnodes('/OMA/Controllers/DCStorageObject/ControllerNum')) {
         my $c = $controller->textContent;
         $xml = XML::LibXML->new( '1.0', 'UTF-8' );
-        $out = `$omreport storage vdisk controller=$c -fmt xml`;
+        $out = `$cmd_prefix storage vdisk controller=$c -fmt xml`;
         $xml = $xml->load_xml( string => $out );
         for my $dev ($xml->findnodes('/OMA/VirtualDisks/DCStorageObject')){
             next if !$dev->getElementsByTagName('DeviceID');
             my $devid   = $dev->getElementsByTagName('DeviceID');
             my $devname = $dev->getElementsByTagName('DeviceName');
             $xml = XML::LibXML->new( '1.0', 'UTF-8' );
-            $out = `$omreport storage pdisk controller=$c vdisk=$devid -fmt xml`;
+            $out = `$cmd_prefix storage pdisk controller=$c vdisk=$devid -fmt xml`;
             $xml = $xml->load_xml( string => $out );
             for my $pd ($xml->findnodes('/OMA/ArrayDisks/DCStorageObject')){
                 my $pdid    = $pd->getElementsByTagName('DeviceID');
