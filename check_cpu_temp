@@ -64,7 +64,6 @@ if ($no_bin){
     usage();
 }
 my $exit_status       = 'OK';
-my $exit_status_local = 'OK';
 my $status_string     = '';
 my $perfdata_string   = '';
 
@@ -75,14 +74,13 @@ my $reg    = qr/$reg_t$reg_dg\s+?(\(high\s=\s$reg_t$reg_dg,\s+crit\s=\s$reg_t$re
 sub return_status {
     my $request_status = shift;
     if ( $request_status eq 'WARNING' ) {
-        return if ( $exit_status or $exit_status_local ) eq 'CRITICAL';
+        return if $exit_status eq 'CRITICAL';
     }
     if ( $request_status eq 'UNKNOWN' ) {
-        return if ( $exit_status or $exit_status_local ) eq 'WARNING';
-        return if ( $exit_status or $exit_status_local ) eq 'CRITICAL';
+        return if $exit_status eq 'WARNING';
+        return if $exit_status eq 'CRITICAL';
     }
-    $exit_status       = $request_status;
-    $exit_status_local = $request_status;
+    $exit_status = $request_status;
 }
 sub make_sensors_conf {
     system "echo -e | sudo $sensors_detect > /dev/null";
