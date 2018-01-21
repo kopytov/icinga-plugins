@@ -112,6 +112,7 @@ for my $line ( @sensors_data ){
     my ($name, $data);
     ($name, $data) = split /:\s+/, $line;
     $name =~ s/\s+/_/g;
+    next if $name !~ m/^\s?(Physical|Core)/;
 
     my ($temp, $crit, $warn);
     $data =~ $reg;
