@@ -121,7 +121,7 @@ for my $line ( @sensors_data ){
     $critical = $critical ? $critical :
       defined $crit ? $crit : 100;
 
-    $perfdata_string .= "$name=$temp;$warning;$critical;;";
+    $perfdata_string .= "$name=$temp;$warning;$critical;; ";
     if ( $temp >= $critical ){
         $status_string .= "$name: temperature $temp is critical\n";
         return_status('CRITICAL');
