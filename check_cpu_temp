@@ -60,7 +60,7 @@ if ( !-X $sensors_detect ) {
     $no_bin .= "sensors-detect not found, please set path to sensors-detect\n";
 }
 if ($no_bin){
-    say $no_bin;
+    print "$no_bin\n";
     usage();
 }
 my $exit_status       = 'OK';
