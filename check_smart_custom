@@ -342,7 +342,8 @@ foreach my $dev ( sort keys %devices ) {
             ) = ( $1, $2, $3, $4, $5, $6 );
 
             # skip some attributes
-            next if ( grep { $_ eq $attribute_name } ('Power_On_Minutes') );
+            next if ( grep { $_ eq $attribute_name }
+                qw(Power_On_Minutes Unknown_Attribute) );
 
             # skip Reallocated_Event_Count if Reallocated_Sector_Ct in normal state
             # 30 magic number
