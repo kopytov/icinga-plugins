@@ -330,15 +330,16 @@ foreach my $dev ( sort keys %devices ) {
 
     if ( $output_mode =~ "ata" ) {
         my $reallocated_sector_ct;
+        my $temperature_name = '';
 
         foreach my $line (@result) {
             next
               unless $line
-              =~ /^\s*\d+\s(\S+)\s+(?:\S+\s+)\s+(\d+)\s+(?:\S+\s+)\s+(\d+)\s+(?:\S+\s+){2}(\S+)\s+(\d+)/;
+              =~ /^\s*(\d+)\s(\S+)\s+(?:\S+\s+)\s+(\d+)\s+(?:\S+\s+)\s+(\d+)\s+(?:\S+\s+){2}(\S+)\s+(\d+)/;
             my (
-                $attribute_name, $current_value, $thresh_value,
-                $when_failed,    $raw_value
-            ) = ( $1, $2, $3, $4, $5 );
+                $attribute_id, $attribute_name, $current_value,
+                $thresh_value, $when_failed,    $raw_value
+            ) = ( $1, $2, $3, $4, $5, $6 );
 
             # skip some attributes
             next if ( grep { $_ eq $attribute_name } ('Power_On_Minutes') );
@@ -353,8 +354,12 @@ foreach my $dev ( sort keys %devices ) {
               $reallocated_sector_ct > 30
             );
 
-            if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/ ){
+            if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/
+              && $attribute_id  != 231 ){
+                next if ($temperature_name eq 'Temperature_Celsius');
+                $temperature_name = $attribute_name;
                 $perfdata_string .= "\'$perfdata_label" .'_temp\'='. sprintf("%d", $raw_value) .';;;; ';
+
             }
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
