@@ -87,32 +87,49 @@ sub make_sensors_conf {
 }
 
 # sensors | grep "°C" | sed -r 's/:[ ]+[+]?([0-9.]+)°C.*$/=\1/;s/ /_/g;
-my @sensors_data = `$sensors | grep "°C"`;
+my @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
 if (!grep { /^(Physical|Core)/ } grep {/$reg/} @sensors_data){
     if ( -f '/etc/sysconfig/lm_sensors' ){
         my $conf = `cat /etc/sysconfig/lm_sensors`;
         if ($conf =~ m/Run sensors-detect to generate this config file/) {
             make_sensors_conf;
-            @sensors_data = `$sensors | grep "°C"`;
+            @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
         }
         else {
             system 'mv /etc/sysconfig/lm_sensors{,.bkp}';
             make_sensors_conf;
-            @sensors_data = `$sensors | grep "°C"`;
+            @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
             system 'mv /etc/sysconfig/lm_sensors{.bkp,}';
         }
     }
     else{
         make_sensors_conf;
-        @sensors_data = `$sensors | grep "°C"`;
+        @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
     }
 }
 
+my %cpus;
+my $cpu = 0;
 for my $line ( @sensors_data ){
     my ($name, $data);
     ($name, $data) = split /:\s+/, $line;
-    $name =~ s/\s+/_/g;
+    $name =~ s/\s+//g;
+
+    $cpu = sprintf("%d", $1)
+      if $line =~ m/coretemp-isa-/
+      && $line =~ m/(\d+)$/;
+
     next if $name !~ m/^\s?(Physical|Core)/;
+
+    if ( $cpus{$cpu}{$name} ){
+        foreach my $cp (sort keys %cpus){
+            if ($cpus{$cp}{$name}){
+                $cpu ++;
+                last;
+            }
+        }
+    }
+    $cpus{$cpu}{$name} = 1;
 
     my ($temp, $crit, $warn);
     $data =~ $reg;
@@ -122,6 +139,7 @@ for my $line ( @sensors_data ){
     $critical = $critical ? $critical :
       defined $crit ? $crit : 100;
 
+    $name = "cpu$cpu.". lc $name;
     $perfdata_string .= "$name=$temp;$warning;$critical;; ";
     if ( $temp >= $critical ){
         $status_string .= "$name: temperature $temp is critical\n";
