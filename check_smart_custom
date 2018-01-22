@@ -330,7 +330,7 @@ foreach my $dev ( sort keys %devices ) {
 
     if ( $output_mode =~ "ata" ) {
         my $reallocated_sector_ct;
-        my $temperature_name = '';
+        my %temp;
 
         foreach my $line (@result) {
             next
@@ -356,10 +356,7 @@ foreach my $dev ( sort keys %devices ) {
 
             if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/
               && $attribute_id  != 231 ){
-                next if ($temperature_name eq 'Temperature_Celsius');
-                $temperature_name = $attribute_name;
-                $perfdata_string .= "\'$perfdata_label" .'_temp\'='. sprintf("%d", $raw_value) .';;;; ';
-
+                $temp{$perfdata_label}{$attribute_name} = sprintf("%d", $raw_value);
             }
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
@@ -373,6 +370,16 @@ foreach my $dev ( sort keys %devices ) {
                 return_status('WARNING');
             }
         }
+        # build perfdata string
+        foreach my $label ( keys %temp ){
+            $perfdata_string .= $temp{$label}{'Temperature_Celsius'} ?
+              "\'$label" .'_temp\'='. $temp{$label}{'Temperature_Celsius'} .';;;; ' :
+              $temp{$label}{'Airflow_Temperature_Cel'} ?
+              "\'$label" .'_tempAir\'='. $temp{$label}{'Airflow_Temperature_Cel'} .';;;; ' :
+              "\'$label" .'_temp\'=0;;;; ';
+        }
+
+
     }
     elsif ( $output_mode =~ "scsi" ) {
         foreach my $line (@result) {
