@@ -33,7 +33,7 @@ for my $line (@PD_INFO) {
     if ( $line =~ /S.M.A.R.T. warnings\s+:\s(.*)/i ) {
         $PD{$num}{smart_count} = $1;
         if (   $PD{$num}{smart} =~ /Yes/i
-            || $PD{$num}{state} !~ /^Online|^Global/i )
+            || $PD{$num}{state} !~ /^Online|.*hot.spare.*/i )
         {
             push @warnings,
               "Warning: disk in slot $num in state $PD{$num}{state}; Smart warnings $PD{$num}{smart_count}; Serial: $PD{$num}{serial}";
