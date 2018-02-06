@@ -13,24 +13,30 @@ my %E_STATE = (
     'CRITICAL' => 2,
     'UNKNOWN'  => 3,
 );
-my ( $type, $drives, $sudo, $verbose, $help, $device, $devmath, $temp, $raid );
+my (
+    $type,    $drives, $sudo, $verbose, $help, $device,
+    $devmath, $temp,   $raid, $warning, $critical
+);
 GetOptions(
-    'device=s'   => \$device,
-    'devmath=s'  => \$devmath,
-    't|type=s'   => \$type,
-    'd|drives=s' => \$drives,
-    's|sudo'     => \$sudo,
-    'p|path=s'   => \$path,
-    'h|help'     => \$help,
-    'r|raid=s'   => \$raid,
-    'temp'       => \$temp,
+    'device=s'     => \$device,
+    'devmath=s'    => \$devmath,
+    't|type=s'     => \$type,
+    'd|drives=s'   => \$drives,
+    's|sudo'       => \$sudo,
+    'p|path=s'     => \$path,
+    'h|help'       => \$help,
+    'r|raid=s'     => \$raid,
+    'temp'         => \$temp,
+    'w|warning=i'  => \$warning,
+    'c|critical=i' => \$critical,
 );
 
 pod2usage( -verbose => 2 )
   if $help;
 pod2usage(1)
-  if !defined $raid and ( !defined $type
-     or !defined( $device or $devmath ));
+  if !defined $raid
+  and (!defined $type
+    or !defined( $device or $devmath ) );
 
 =head1 SYNOPSIS
 
@@ -74,6 +80,14 @@ autodetected all disks connected to raid controller. Example --raid perc
 
 Now support only perc raid controllers.
 
+=item B<--warning> or B<-w>
+
+Warning hard drive temp
+
+=item B<--critical> or B<-c>
+
+Critical hard drive temp
+
 =item B<--help> or B<-h>
 
 this help information
@@ -111,48 +125,53 @@ if ( !-X $path ) {
     exit $E_STATE{'UNKNOWN'};
 }
 
-
 # parse drives or devices
 my %devices;
-if ( $raid && $raid eq 'perc' ){
+if ( $raid && $raid eq 'perc' ) {
     my $omreport = '/opt/dell/srvadmin/bin/omreport';
-    if ( ! -x $omreport ){
-        my $run   = `which omreport`;
+    if ( !-x $omreport ) {
+        my $run = `which omreport`;
         $omreport = $run if !$?;
-        if (-x $omreport or $?){
+        if ( -x $omreport or $? ) {
             print "omreport not installed on this server\n";
             exit $E_STATE{'UNKNOWN'};
         }
     }
     require XML::LibXML;
-    my ($out, $xml);
+    my ( $out, $xml );
     my $cmd_prefix = $sudo ? "sudo $omreport" : "$omreport";
     $out = `$cmd_prefix storage controller -fmt xml`;
     $xml = XML::LibXML->new( '1.0', 'UTF-8' );
     $xml = $xml->load_xml( string => $out );
-    for my $controller ($xml->findnodes('/OMA/Controllers/DCStorageObject/ControllerNum')) {
+    for my $controller (
+        $xml->findnodes('/OMA/Controllers/DCStorageObject/ControllerNum') )
+    {
         my $c = $controller->textContent;
         $xml = XML::LibXML->new( '1.0', 'UTF-8' );
         $out = `$cmd_prefix storage vdisk controller=$c -fmt xml`;
         $xml = $xml->load_xml( string => $out );
-        for my $dev ($xml->findnodes('/OMA/VirtualDisks/DCStorageObject')){
+        for my $dev ( $xml->findnodes('/OMA/VirtualDisks/DCStorageObject') ) {
             next if !$dev->getElementsByTagName('DeviceID');
             my $devid   = $dev->getElementsByTagName('DeviceID');
             my $devname = $dev->getElementsByTagName('DeviceName');
             $xml = XML::LibXML->new( '1.0', 'UTF-8' );
-            $out = `$cmd_prefix storage pdisk controller=$c vdisk=$devid -fmt xml`;
+            $out
+              = `$cmd_prefix storage pdisk controller=$c vdisk=$devid -fmt xml`;
             $xml = $xml->load_xml( string => $out );
-            for my $pd ($xml->findnodes('/OMA/ArrayDisks/DCStorageObject')){
+            for my $pd ( $xml->findnodes('/OMA/ArrayDisks/DCStorageObject') )
+            {
                 my $pdid    = $pd->getElementsByTagName('DeviceID');
                 my $pdproto = $pd->getElementsByTagName('BusProtocol');
+
                 # 7-sata, 8-sas
-                my $pdtype = "$pdproto" == 7 ? 'sat+megaraid' :
-                             "$pdproto" == 8 ? 'megaraid'     :
-                             die 'disk type not defined';
+                my $pdtype
+                  = "$pdproto" == 7 ? 'sat+megaraid'
+                  : "$pdproto" == 8 ? 'megaraid'
+                  :                   die 'disk type not defined';
 
                 $devices{$pdid}{'type'}   = $pdtype;
                 $devices{$pdid}{'device'} = $devname;
-                $drives = 1;
+                $drives                   = 1;
             }
         }
     }
@@ -161,22 +180,24 @@ else {
     if ( defined $drives ) {
         my @prep_drives = split /,/, $drives;
         for my $drive (@prep_drives) {
+
             # push @devices, $drive if $drive =~ m/^\d+$/;
             # push @devices, $1 .. $5
             #   if $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/;
-            if ( $drive =~ m/^\d+$/ ){
+            if ( $drive =~ m/^\d+$/ ) {
                 $devices{$drive}{'type'}   = $type;
                 $devices{$drive}{'device'} = $device;
             }
-            elsif( $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/){
-                for ( $1 .. $5 ){
+            elsif ( $drive =~ m/^(\d+)\s?((\.\.)|(-))\s?(\d+)$/ ) {
+                for ( $1 .. $5 ) {
                     $devices{$_}{'type'}   = $type;
                     $devices{$_}{'device'} = $device;
                 }
-            };
+            }
         }
     }
     elsif ( !defined $drives and $device ) {
+
         #push @devices, $device;
         $devices{$device}{'type'}   = $type;
         $devices{$device}{'device'} = $device;
@@ -190,9 +211,11 @@ else {
         }
         my ( $dev_start, $dev_end ) = ( $1, $5 )
           if $dev_premath =~ m/\(?\[?(\w+)\s?((\.\.)|(-))\s?(\w+)\]?\)?/;
+
         #push @devices, "$dev_prefix$_" for $dev_start .. $dev_end;
-        $devices{"$dev_prefix$_"}{'type'}   = $type   for $dev_start .. $dev_end;
-        $devices{"$dev_prefix$_"}{'device'} = $device for $dev_start .. $dev_end;
+        $devices{"$dev_prefix$_"}{'type'} = $type for $dev_start .. $dev_end;
+        $devices{"$dev_prefix$_"}{'device'} = $device
+          for $dev_start .. $dev_end;
     }
 }
 if ( !%devices ) {
@@ -200,10 +223,14 @@ if ( !%devices ) {
     exit $E_STATE{'UNKNOWN'};
 }
 
+# set default temp
+$warning  = 60 unless $warning;
+$critical = 70 unless $critical;
 
 # work
 my $exit_status       = 'OK';
 my $exit_status_local = 'OK';
+my $exit_status_temp  = 'OK';
 my $status_string     = '';
 my $perfdata_string   = '';
 
@@ -220,6 +247,24 @@ sub return_status {
     $exit_status_local = $request_status;
 }
 
+sub temp_status {
+    my $temp_value = shift;
+    my $temp_status
+      = ( $temp_value >= $critical ) ? 'CRITICAL'
+      : ( $temp_value >= $warning ) ? 'WARNING'
+      : ( $temp_value <= 0 )        ? 'UNKNOWN'
+      :                               'OK';
+    return if $temp_status eq 'OK';
+
+    if ( $temp_status eq 'WARNING' ) {
+        return if ( $exit_status or $exit_status_local ) eq 'CRITICAL';
+    }
+    if ( $temp_status eq 'UNKNOWN' ) {
+        return if ( $exit_status or $exit_status_local ) eq 'WARNING';
+        return if ( $exit_status or $exit_status_local ) eq 'CRITICAL';
+    }
+    $exit_status_temp = $temp_status;
+}
 
 foreach my $dev ( sort keys %devices ) {
     my $type   = $devices{$dev}{'type'};
@@ -227,11 +272,8 @@ foreach my $dev ( sort keys %devices ) {
 
     my @error_messages = qw//;
     $exit_status_local = 'OK';
-    my (
-        $label,              , $perfdata_label,
-        $smart_overall_state , $smart_silent_check,
-        $smart_detailed_state,
-    );
+    my ( $label,, $perfdata_label, $smart_overall_state, $smart_silent_check,
+        $smart_detailed_state, );
     if ( defined $drives ) {
         $label                = "$device: $type,$dev - ";
         $perfdata_label       = "$device,$dev";
@@ -342,22 +384,25 @@ foreach my $dev ( sort keys %devices ) {
             ) = ( $1, $2, $3, $4, $5, $6 );
 
             # skip some attributes
-            next if ( grep { $_ eq $attribute_name }
+            next
+              if ( grep { $_ eq $attribute_name }
                 qw(Power_On_Minutes Unknown_Attribute) );
 
-            # skip Reallocated_Event_Count if Reallocated_Sector_Ct in normal state
-            # 30 magic number
+       # skip Reallocated_Event_Count if Reallocated_Sector_Ct in normal state
+       # 30 magic number
             $reallocated_sector_ct = $current_value - $thresh_value
               if ( $attribute_name eq 'Reallocated_Sector_Ct' );
-            next if (
-              $attribute_name eq 'Reallocated_Event_Count' &&
-              $current_value <= $thresh_value &&
-              $reallocated_sector_ct > 30
-            );
+            next
+              if ( $attribute_name eq 'Reallocated_Event_Count'
+                && $current_value <= $thresh_value
+                && $reallocated_sector_ct > 30 );
 
-            if ( $attribute_name =~ /Airflow_Temperature_Cel|Temperature_Celsius/
-              && $attribute_id  != 231 ){
-                $temp{$perfdata_label}{$attribute_name} = sprintf("%d", $raw_value);
+            if ( $attribute_name
+                =~ /Airflow_Temperature_Cel|Temperature_Celsius/
+                && $attribute_id != 231 )
+            {
+                $temp{$perfdata_label}{$attribute_name}
+                  = sprintf( "%d", $raw_value );
             }
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
@@ -371,15 +416,30 @@ foreach my $dev ( sort keys %devices ) {
                 return_status('WARNING');
             }
         }
-        # build perfdata string
-        foreach my $label ( keys %temp ){
-            $perfdata_string .= $temp{$label}{'Temperature_Celsius'} ?
-              "\'$label" .'_temp\'='. $temp{$label}{'Temperature_Celsius'} .';;;; ' :
-              $temp{$label}{'Airflow_Temperature_Cel'} ?
-              "\'$label" .'_tempAir\'='. $temp{$label}{'Airflow_Temperature_Cel'} .';;;; ' :
-              "\'$label" .'_temp\'=0;;;; ';
-        }
 
+        # build perfdata string
+        foreach my $label ( keys %temp ) {
+            $perfdata_string .=
+              $temp{$label}{'Temperature_Celsius'}
+              ? "\'$label"
+              . '_temp\'='
+              . $temp{$label}{'Temperature_Celsius'} . ';'
+              . $warning . ';'
+              . $critical . ';; '
+              : $temp{$label}{'Airflow_Temperature_Cel'} ? "\'$label"
+              . '_tempAir\'='
+              . $temp{$label}{'Airflow_Temperature_Cel'} . ';'
+              . $warning . ';'
+              . $critical . ';; '
+              : "\'$label" . '_temp\'=0;;;; ';
+            temp_status(
+                  $temp{$label}{'Temperature_Celsius'}
+                ? $temp{$label}{'Temperature_Celsius'}
+                : $temp{$label}{'Airflow_Temperature_Cel'}
+                ? $temp{$label}{'Airflow_Temperature_Cel'}
+                : 0
+            );
+        }
 
     }
     elsif ( $output_mode =~ "scsi" ) {
@@ -409,8 +469,14 @@ foreach my $dev ( sort keys %devices ) {
                     return_status('OK');
                 }
             }
-            if ( $current_temperature ){
-                $perfdata_string .= "\'$perfdata_label" .'_temp\'='. sprintf("%d", $current_temperature) .';;;; ';
+            if ($current_temperature) {
+                $perfdata_string
+                  .= "\'$perfdata_label"
+                  . '_temp\'='
+                  . sprintf( "%d", $current_temperature ) . ';'
+                  . $warning . ';'
+                  . $critical . ';; ';
+                temp_status($current_temperature);
             }
             if (   ( $current_temperature && $max_temperature )
                 && ( $current_temperature >= $max_temperature ) )
@@ -438,13 +504,25 @@ foreach my $dev ( sort keys %devices ) {
     }
     else {
         $status_string .= $label . "no SMART errors detected" . ".\n";
-        $status_string .= $label . join( ', ', @error_messages ) . ".\n" if @error_messages;
+        $status_string .= $label . join( ', ', @error_messages ) . ".\n"
+          if @error_messages;
     }
 }
 
-print "$exit_status";
-print ": \n$status_string" if !$temp;
-print "|$perfdata_string\n";
-exit $E_STATE{$exit_status};
+if ($temp) {
+    print "$exit_status_temp";
+    print "|$perfdata_string\n";
+    exit $E_STATE{$exit_status_temp};
+}
+else {
+    $exit_status
+      = $E_STATE{$exit_status} > $E_STATE{$exit_status_temp}
+      ? $exit_status
+      : $exit_status_temp;
+    print "$exit_status";
+    print ": \n$status_string";
+    print "|$perfdata_string\n";
+    exit $E_STATE{$exit_status};
+}
 
 1;
