@@ -36,7 +36,7 @@ Options:
     -s|--sudo        - Use sudo for sensors and sensors-detect commands
     -h|--help        - this help information
 
-    --sensors        - Set path to sensors util. Default /usr/sbin/smartctl
+    --sensors        - Set path to sensors util. Default /usr/sbin/sensors
     --sensors-detect - Set path to sensors-detect util. Default /usr/sbin/sensors-detect
 
     WARNING_CPU_TEMP  - default value from sensors output, if not def = 80;
@@ -95,7 +95,7 @@ if (!grep { /^(Physical|Core)/ } grep {/$reg/} @sensors_data){
             make_sensors_conf;
             @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
         }
-        else {
+        elsif (!$sudo) {
             system 'mv /etc/sysconfig/lm_sensors{,.bkp}';
             make_sensors_conf;
             @sensors_data = `$sensors | grep "°C\\|coretemp-isa"`;
