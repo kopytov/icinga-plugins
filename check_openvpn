@@ -26,5 +26,5 @@ while [ ! -z "$1" ]; do
 	shift
 done
 
-/usr/lib64/nagios/plugins/check_udp -H $HOST -p $PORT -s '$38$01$00$00$00$00$00$00$00' -e ""
+/usr/lib64/nagios/plugins/check_udp -H $HOST -p $PORT -s "$38$01$00$00$00$00$00$00$00" -e ""
 exit 0
