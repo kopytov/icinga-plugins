@@ -63,8 +63,9 @@ for my $i ( keys %data ) {
         chomp $bytes;
         $data{$i}{$d} = $bytes - $data{$i}{$d};
     }
-    my $iface_speed_bits = `expr \$(cat /sys/class/net/$i/speed) '*' 1000000`;
+    my $iface_speed_bits = `expr \$(cat /sys/class/net/$i/speed 2>/dev/null) '*' 1000000 2>/dev/null`;
     chomp $iface_speed_bits;
+    $iface_speed_bits //= 100000000;
     my $in_bits   = sprintf( "%d",   $data{$i}{rx} * 8 / $interval );
     my $out_bits  = sprintf( "%d",   $data{$i}{tx} * 8 / $interval );
     my $in_mbits  = sprintf( "%.2f", $in_bits / 1000000 );
