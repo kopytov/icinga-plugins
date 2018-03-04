@@ -1,6 +1,5 @@
 #!/usr/bin/env perl
 use warnings;
-use autodie;
 use Carp;
 use Getopt::Long;
 use File::Basename;
