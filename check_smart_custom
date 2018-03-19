@@ -14,21 +14,23 @@ my %E_STATE = (
     'UNKNOWN'  => 3,
 );
 my (
-    $type,    $drives, $sudo, $verbose, $help, $device,
-    $devmath, $temp,   $raid, $warning, $critical
+    $type, $drives,  $sudo,     $verbose,
+    $help, $device,  $devmath,  $temp,
+    $raid, $warning, $critical, $exclude_failed,
 );
 GetOptions(
-    'device=s'     => \$device,
-    'devmath=s'    => \$devmath,
-    't|type=s'     => \$type,
-    'd|drives=s'   => \$drives,
-    's|sudo'       => \$sudo,
-    'p|path=s'     => \$path,
-    'h|help'       => \$help,
-    'r|raid=s'     => \$raid,
-    'temp'         => \$temp,
-    'w|warning=i'  => \$warning,
-    'c|critical=i' => \$critical,
+    'device=s'            => \$device,
+    'devmath=s'           => \$devmath,
+    't|type=s'            => \$type,
+    'd|drives=s'          => \$drives,
+    's|sudo'              => \$sudo,
+    'p|path=s'            => \$path,
+    'h|help'              => \$help,
+    'r|raid=s'            => \$raid,
+    'temp'                => \$temp,
+    'w|warning=i'         => \$warning,
+    'c|critical=i'        => \$critical,
+    'ef|exclude-failed=s' => \$exclude_failed,
 );
 
 pod2usage( -verbose => 2 )
@@ -88,6 +90,10 @@ Warning hard drive temp
 
 Critical hard drive temp
 
+=item B<--exclude-failed> or B<-e>
+
+Exclude failed smart attribute, value for attribute or value for all attributes
+
 =item B<--help> or B<-h>
 
 this help information
@@ -112,6 +118,14 @@ Perc:
     check_smart_custom --raid perc
 
     Required installed omreport util and started srvadmin-services.sh
+
+Examples use --exclude-failed option:
+
+  --exclude-failed="Airflow_Temperature_Cel=In_the_past,Reallocated_Event_Count=,=In_the_past"
+
+  Airflow_Temperature_Cel=In_the_past  - skip failed value In_the_past for Airflow_Temperature_Cel
+  Reallocated_Event_Count=             - skip any value for Reallocated_Event_Count
+  =In_the_past                         - skip this value for any attributes
 
 =cut
 
@@ -221,6 +235,24 @@ else {
 if ( !%devices ) {
     print "Device not found\n";
     exit $E_STATE{'UNKNOWN'};
+}
+
+# parse exclude
+my %exclude_failed;
+if ($exclude_failed) {
+    my @excludes = split /,/, $exclude_failed;
+    for my $exclude (@excludes) {
+        my ( $attr, $value ) = split /=/, $exclude;
+        if ( $attr && $value ) {
+            push @{ $exclude_failed{$attr} }, $value;
+        }
+        elsif ( $attr && !$value ) {
+            push @{ $exclude_failed{attrs} }, $attr;
+        }
+        elsif ( !$attr && $value ) {
+            push @{ $exclude_failed{values} }, $value;
+        }
+    }
 }
 
 # set default temp
@@ -407,7 +439,14 @@ foreach my $dev ( sort keys %devices ) {
             if ( $when_failed ne '-' ) {
                 push( @error_messages,
                     "Attribute $attribute_name failed at $when_failed" );
-                return_status('WARNING');
+
+                my $status
+                  = $attribute_name ~~ @{ $exclude_failed{attrs} }  ? 'OK'
+                  : $when_failed    ~~ @{ $exclude_failed{values} } ? 'OK'
+                  : $when_failed    ~~ @{ $exclude_failed{$attribute_name} }
+                  ? 'OK'
+                  : 'WARNING';
+                return_status($status);
             }
             if ( $current_value <= $thresh_value ) {
                 push( @error_messages,
