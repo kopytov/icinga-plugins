@@ -213,8 +213,9 @@ else {
     elsif ( !defined $drives and $device ) {
 
         #push @devices, $device;
-        $devices{$device}{'type'}   = $type;
-        $devices{$device}{'device'} = $device;
+        my @devices = split( ',', $device );
+        map { $devices{$_}{'device'} = $_; $devices{$_}{'type'} = $type }
+          @devices;
     }
     elsif ($devmath) {
         my ( $dev_prefix, $dev_premath ) = ( $1, $2 )
@@ -443,7 +444,7 @@ foreach my $dev ( sort keys %devices ) {
                 my $status
                   = $attribute_name ~~ @{ $exclude_failed{attrs} }  ? 'OK'
                   : $when_failed    ~~ @{ $exclude_failed{values} } ? 'OK'
-                  : $when_failed    ~~ @{ $exclude_failed{$attribute_name} }
+                  : $when_failed ~~ @{ $exclude_failed{$attribute_name} }
                   ? 'OK'
                   : 'WARNING';
                 return_status($status);
