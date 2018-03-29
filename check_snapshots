@@ -1,5 +1,8 @@
 #!/usr/bin/env perl
 use extreme;
+use English;
+
+exec "sudo $0 @ARGV" if $UID > 0;
 
 my @snapshots
   = `find /vz/private/*/root.hdd/ -type f -name 'root.hdd.*' 2>/dev/null`;
