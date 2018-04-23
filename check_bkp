@@ -61,7 +61,10 @@ for profile in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`
         if [ ! -f "/etc/vz/conf/${ctid}.conf" ]; then
             continue
         fi
-        suspended=`grep -soPi "disabled=.*yes" /etc/vz/conf/${ctid}.conf`
+	if [ ! -z "$(sudo vzlist -S -H ${ctid})" ]; then
+            continue
+        fi
+	suspended=`grep -soPi "disabled=.*yes" /etc/vz/conf/${ctid}.conf`
         test $suspended && continue
         last_unsuspend_seconds=`mysql -sN -e "select max(date) from systemmessages where content like '%/vz/private/$ctid%' and subject like '%[Unsuspend]%'"`
         if (( $[now - last_unsuspend_seconds] < $limit )); then
