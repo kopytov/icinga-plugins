@@ -36,7 +36,6 @@ my @rbls = qw/
   psbl.surriel.com
   virbl.bit.nl
   rot.blackhole.cantv.net
-  virus.rbl.jp
   wormrbl.imp.ch
   spamrbl.imp.ch
   virus.rbl.msrbl.net
@@ -59,8 +58,6 @@ my @rbls = qw/
   uribl.swinog.ch
   bsb.spamlookup.net
   dob.sibl.support-intelligence.net
-  url.rbl.jp
-  dyndns.rbl.jp
   bogons.cymru.com
   omrs.dnsbl.net.au
   osrs.dnsbl.net.au
@@ -75,7 +72,6 @@ my @rbls = qw/
   dynip.rothen.com
   dul.blackhole.cantv.net
   cdl.anti-spam.org.cn
-  short.rbl.jp
   korea.services.net
   mail.people.it
   blacklist.sci.kun.nl
