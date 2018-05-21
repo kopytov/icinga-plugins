@@ -1,13 +1,27 @@
 #!/bin/bash
 
 exit_code=0
-host=`host google.com 2>/dev/null | grep 'connection timed out'`
+resolvers=$(cat /etc/resolv.conf | grep -i nameserver | awk '{print $2}')
 
-if [ -n "$host" ]; then
-    echo $host
-    exit_code=1
-else
-echo resolvers OK
+if [[ -z $resolvers ]]; then
+    echo -n 'UNKNOWN - No resolvers set up in resolv.conf'
+    exit 3
 fi
 
+if [[ ! -z $(host google.com 2>/dev/null | grep 'connection timed out') ]]; then
+    echo -n 'CRITICAL - No resolvers could be reached'
+    exit 2
+fi
+
+for res in $resolvers; do
+    host=`dig @$res any google.com +short 2>/dev/null | grep 'connection timed out'`
+    if [[ ! -z $host ]]; then
+        result+=$(echo -e "WARNING - Resolver $res is unreachable \n")
+        exit_code=1
+    else
+        result+=$(echo -e "Resolver $res is ok \n")
+    fi
+done
+
+echo $result
 exit $exit_code
