@@ -1,7 +1,7 @@
 #!/bin/bash
 
 exit_code=0
-resolvers=$(cat /etc/resolv.conf | grep -i nameserver | awk '{print $2}')
+resolvers=$(cat /etc/resolv.conf | grep -i "^nameserver" | awk '{print $2}')
 
 if [[ -z $resolvers ]]; then
     echo -n 'UNKNOWN - No resolvers set up in resolv.conf'
