@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use experimental qw( smartmatch );
+no if $] >= 5.018, warnings => 'experimental::smartmatch';
 
 use Getopt::Long;
 use Pod::Usage;
