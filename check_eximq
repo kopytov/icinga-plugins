@@ -1,15 +1,140 @@
 #!/usr/bin/env perl
-use Getopt::Long;
+use extreme;
 
-my ( $opt_h, $opt_w, $opt_c, $opt_t, $status, $state, $msg );
+use Getopt::Long;
+use DBD::SQLite                ();
+
+my ( $opt_h, $opt_w, $opt_c, $opt_t, $spam_time, $spam_count, $status, $state, $msg, $spammers );
+my $timeout;
 my $msg_count    = 0;
 my $path_to_exim = `which exim`;
 chop $path_to_exim;
 my $path_to_sudo = `which sudo`;
 chop $path_to_sudo;
 $path_to_sudo //= '';
-my $timeout = 15;
 my %ERRORS = ( 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'UNKNOWN' => 3 );
+my $eximstats_sqlite_db = '/var/cpanel/eximstats_db.sqlite3';
+my @output_lines;
+#### subs
+
+sub process_arguments() {
+    GetOptions(
+        "h"          => \$opt_h,
+        "help"       => \$opt_h,
+        "w=i"        => \$opt_w,
+        "warning=i"  => \$opt_w,    # warning if above this number
+        "c=i"        => \$opt_c,
+        "critical=i" => \$opt_c,    # critical if above this number
+        "t=i"        => \$opt_t,
+        "timeout=i"  => \$timeout,
+        "st=i"       => \$spam_time,   # timespan to filter eximstats db
+        "stime=i"    => \$spam_time,   # timespan to filter eximstats db
+        "sc=i"       => \$spam_count,    # message count for sender to be considered as spammer
+        "scount=i"   => \$spam_count   # message count for sender to be considered as spammer
+    );
+
+    if ($opt_h) {
+        print_help();
+        exit $ERRORS{'OK'};
+    }
+
+    unless ( defined $timeout ) {
+        $timeout = 15;
+    }
+
+    unless ( defined $spam_time ) {
+        $spam_time = 3600;
+    }
+    unless ( defined $spam_count ) {
+        $spam_count = 100;
+    }
+
+    unless ( defined $opt_w && defined $opt_c ) {
+        print "Usage: $0 -w <warn> -c <crit> [-t <timeout>]\n";
+        exit $ERRORS{'UNKNOWN'};
+    }
+
+    if ( $opt_w >= $opt_c ) {
+        print "Warning (-w) cannot be greater than Critical (-c)!\n";
+        return $ERRORS{'UNKNOWN'};
+    }
+    return $ERRORS{'OK'};
+}
+
+sub print_help () {
+    my $help_text = <<'END';
+Usage: %s -w <warn> -c <crit> [-t <timeout>]
+
+Checks the number of messages in the mail queue for EXIM mta
+  -w (--warning)   = Min. number of messages in queue to generate warning
+  -c (--critical)  = Min. number of messages in queue to generate critical alert ( w < c )
+  -t (--timeout)   = Plugin timeout in seconds (default = %s)
+  -st              = Timespan to filter eximstats db
+  -sc              = Message threshold count for sender in timespan to be considered as spammer
+  -h (--help)
+END
+    printf( $help_text, $0, $timeout );
+}
+
+sub is_cpanel {
+    -d '/usr/local/cpanel' ? return 1 : return 0;
+}
+
+sub run_query {
+    my ($self) = @_;
+
+    local $@;
+    my $dbh = eval {
+        DBI->connect(
+            'dbi:SQLite:' . $eximstats_sqlite_db,
+            undef, undef,
+            {
+                sqlite_open_flags                => DBD::SQLite::OPEN_READONLY(),
+                sqlite_use_immediate_transaction => 0,
+                RaiseError                       => 1,
+                PrintWarn                        => 0,
+            }
+        );
+    };
+    if ( not $dbh or $DBI::errstr ) {
+        my $err = $DBI::errstr // q{something went wrong};
+        my $fail = qq{'$eximstats_sqlite_db' - $err};
+        die qq{$fail\n};
+    }
+
+    my $ts = time();
+
+    my $query = q{SELECT
+  sender,
+  count(sender)
+FROM
+(
+  SELECT
+    DISTINCT sends.sender as sender,
+    smtp.email as recipient
+  FROM sends INNER JOIN smtp on (sends.msgid=smtp.msgid)
+  WHERE
+    sends.sender != '' AND
+    sends.sendunixtime <= ? AND
+    sends.sendunixtime > ? - ? AND
+    smtp.transport_is_remote=1 AND
+    smtp.transport_method != '**bypassed**' AND
+    SUBSTR(smtp.transport_method,1,9) != 'archiver_'
+ )
+GROUP BY sender
+ORDER BY count(sender) DESC;
+};
+
+    my $results = $dbh->selectall_arrayref( $query, undef, $ts, $ts, $spam_time );
+    $dbh->disconnect;
+    foreach my $line (@$results) {
+        next if $line->[1] < $spam_count;
+        push @output_lines, $line->[0];
+    }
+    my $spammers_ref = \@output_lines;
+    my $spammers     = join( ', ', @$spammers_ref );
+    return $spammers;
+}
 
 $status = process_arguments();
 if ($status) {
@@ -21,7 +146,7 @@ $SIG{'ALRM'} = sub {
     print("ERROR: timed out waiting for $path_to_exim \n");
     exit $ERRORS{"WARNING"};
 };
-alarm($opt_t);
+alarm($timeout);
 
 if ( defined $path_to_exim && -x $path_to_exim ) {
     $msg_count = `$path_to_sudo $path_to_exim -bpc`;
@@ -48,61 +173,25 @@ if ( $msg_count < $opt_w ) {
     $state = $ERRORS{'OK'};
 }
 elsif ( $msg_count >= $opt_w && $msg_count < $opt_c ) {
+    if ( is_cpanel() ) {
+      $spammers = run_query();
+    }
     $msg   = "WARNING: mailq is $msg_count (threshold w = $opt_w) $perfdata";
+    if ( is_cpanel() && $spammers ne "" ) {
+      $msg = "WARNING: mailq is $msg_count (threshold w = $opt_w), $spammers may be sending spam. $perfdata";
+    }
     $state = $ERRORS{'WARNING'};
 }
 else {
+    if ( is_cpanel() ) {
+      $spammers = run_query();
+    }
     $msg   = "CRITICAL: mailq is $msg_count (threshold c = $opt_c) $perfdata";
+    if ( is_cpanel() && $spammers ne "" ) {
+      $msg = "CRITICAL: mailq is $msg_count (threshold w = $opt_w), $spammers may be sending spam. $perfdata";
+    }
     $state = $ERRORS{'CRITICAL'};
 }
 
 print "$msg\n";
 exit $state;
-
-#### subs
-
-sub process_arguments() {
-    GetOptions(
-        "h"          => \$opt_h,
-        "help"       => \$opt_h,
-        "w=i"        => \$opt_w,
-        "warning=i"  => \$opt_w,    # warning if above this number
-        "c=i"        => \$opt_c,
-        "critical=i" => \$opt_c,    # critical if above this number
-        "t=i"        => \$opt_t,
-        "timeout=i"  => \$opt_t
-    );
-
-    if ($opt_h) {
-        print_help();
-        exit $ERRORS{'OK'};
-    }
-
-    unless ( defined $opt_t ) {
-        $opt_t = $timeout;
-    }
-
-    unless ( defined $opt_w && defined $opt_c ) {
-        print "Usage: $0 -w <warn> -c <crit> [-t <timeout>]\n";
-        exit $ERRORS{'UNKNOWN'};
-    }
-
-    if ( $opt_w >= $opt_c ) {
-        print "Warning (-w) cannot be greater than Critical (-c)!\n";
-        return $ERRORS{'UNKNOWN'};
-    }
-    return $ERRORS{'OK'};
-}
-
-sub print_help () {
-    my $help_text = <<'END';
-Usage: %s -w <warn> -c <crit> [-t <timeout>]
-
-Checks the number of messages in the mail queue for EXIM mta
-  -w (--warning)   = Min. number of messages in queue to generate warning
-  -c (--critical)  = Min. number of messages in queue to generate critical alert ( w < c )
-  -t (--timeout)   = Plugin timeout in seconds (default = %s)
-  -h (--help)
-END
-    printf( $help_text, $0, $timeout );
-}
