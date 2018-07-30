@@ -50,3 +50,6 @@ check_drdb - check drdb state
 
 check_diskstat - check IO stats of hard drive
 https://exchange.nagios.org/directory/Plugins/Operating-Systems/Linux/Check-IO-stats-of-one-or-all-disks/details
+
+check_http_content - Checks a URL for specific text
+https://exchange.nagios.org/directory/Plugins/Websites,-Forms-and-Transactions/check_http_content/details
