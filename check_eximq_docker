@@ -1,0 +1,108 @@
+#!/usr/bin/env perl
+use Getopt::Long;
+
+my ( $opt_h, $opt_w, $opt_c, $opt_t, $status, $state, $msg );
+my $msg_count    = 0;
+my $path_to_exim = `which exim`;
+chop $path_to_exim;
+my $path_to_sudo = `which sudo`;
+chop $path_to_sudo;
+$path_to_sudo //= '';
+my $timeout = 15;
+my %ERRORS = ( 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'UNKNOWN' => 3 );
+
+$status = process_arguments();
+if ($status) {
+    print "ERROR: processing arguments\n";
+    exit $ERRORS{"UNKNOWN"};
+}
+
+$SIG{'ALRM'} = sub {
+    print("ERROR: timed out waiting for $path_to_exim \n");
+    exit $ERRORS{"WARNING"};
+};
+alarm($opt_t);
+
+if ( defined $path_to_exim && -x $path_to_exim ) {
+    $msg_count = `$path_to_sudo $path_to_exim -bpc`;
+}
+else {
+    print "Check permissions and path to exim\n";
+    exit $ERRORS{'UNKNOWN'};
+}
+
+if ($?) {
+    print "CRITICAL: Error code \n"
+      . ( $? >> 8 )
+      . " returned from $path_to_exim", $/;
+    exit $ERRORS{CRITICAL};
+}
+
+chomp $msg_count;
+
+
+my $perfdata = " | count=$msg_count;$opt_w;$opt_c;;";
+
+if ( $msg_count < $opt_w ) {
+    $msg   = "OK: mailq ($msg_count) is below threshold ($opt_w/$opt_c) $perfdata";
+    $state = $ERRORS{'OK'};
+}
+elsif ( $msg_count >= $opt_w && $msg_count < $opt_c ) {
+    $msg   = "WARNING: mailq is $msg_count (threshold w = $opt_w) $perfdata";
+    $state = $ERRORS{'WARNING'};
+}
+else {
+    $msg   = "CRITICAL: mailq is $msg_count (threshold c = $opt_c) $perfdata";
+    $state = $ERRORS{'CRITICAL'};
+}
+
+print "$msg\n";
+exit $state;
+
+#### subs
+
+sub process_arguments() {
+    GetOptions(
+        "h"          => \$opt_h,
+        "help"       => \$opt_h,
+        "w=i"        => \$opt_w,
+        "warning=i"  => \$opt_w,    # warning if above this number
+        "c=i"        => \$opt_c,
+        "critical=i" => \$opt_c,    # critical if above this number
+        "t=i"        => \$opt_t,
+        "timeout=i"  => \$opt_t
+    );
+
+    if ($opt_h) {
+        print_help();
+        exit $ERRORS{'OK'};
+    }
+
+    unless ( defined $opt_t ) {
+        $opt_t = $timeout;
+    }
+
+    unless ( defined $opt_w && defined $opt_c ) {
+        print "Usage: $0 -w <warn> -c <crit> [-t <timeout>]\n";
+        exit $ERRORS{'UNKNOWN'};
+    }
+
+    if ( $opt_w >= $opt_c ) {
+        print "Warning (-w) cannot be greater than Critical (-c)!\n";
+        return $ERRORS{'UNKNOWN'};
+    }
+    return $ERRORS{'OK'};
+}
+
+sub print_help () {
+    my $help_text = <<'END';
+Usage: %s -w <warn> -c <crit> [-t <timeout>]
+
+Checks the number of messages in the mail queue for EXIM mta
+  -w (--warning)   = Min. number of messages in queue to generate warning
+  -c (--critical)  = Min. number of messages in queue to generate critical alert ( w < c )
+  -t (--timeout)   = Plugin timeout in seconds (default = %s)
+  -h (--help)
+END
+    printf( $help_text, $0, $timeout );
+}
