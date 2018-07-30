@@ -53,3 +53,5 @@ https://exchange.nagios.org/directory/Plugins/Operating-Systems/Linux/Check-IO-s
 
 check_http_content - Checks a URL for specific text
 https://exchange.nagios.org/directory/Plugins/Websites,-Forms-and-Transactions/check_http_content/details
+
+check_eximq_docker - old check exim mail queue plugin, now used in docker CTs;
