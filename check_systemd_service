@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Copyright © 2016, 2017 Mohamed El Morabity <melmorabity@fedoraproject.com>
+#
+# This module is free software: you can redistribute it and/or modify it under
+# the terms of the GNU General Public License as published by the Free Software
+# Foundation, either version 3 of the License, or (at your option) any later
+# version.
+#
+# This software is distributed in the hope that it will be useful, but WITHOUT
+# ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+# FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along with
+# this program. If not, see <http://www.gnu.org/licenses/>.
+
+
+usage()
+{
+cat <<EOF
+
+Check if systemd service is running
+
+    Options:
+    -s      service to check
+    -h      help message
+
+Usage: "${0##*/}" -s <service name>
+EOF
+}
+
+argcheck() {
+# if less than n argument
+if [ $ARGC -lt $1 ]; then
+  echo "Missing arguments! Use \`\`-h'' for help."
+  exit $STATE_UNKNOWN
+fi
+}
+
+CHECK=0
+ARGC=$#
+
+argcheck 1
+
+while getopts "h:help:\?:s:" OPTION
+do
+  case $OPTION in
+    h|H|help|\?)
+      usage
+      exit 1
+      ;;
+    s)
+      service="$OPTARG"
+      CHECK=1
+      ;;
+esac
+done
+
+PLUGINDIR=$(dirname $0)
+. $PLUGINDIR/utils.sh
+
+status=$(systemctl is-enabled $service 2>/dev/null)
+r=$?
+if [[ -z "$status" ]]; then
+    echo "ERROR: service $service doesn't exist"
+    exit $STATE_CRITICAL
+fi
+
+if [[ $r -ne 0 ]]; then
+    echo "ERROR: service $service is $status"
+    exit $STATE_CRITICAL
+fi
+
+
+systemctl --quiet is-active $service
+if [[ $? -ne 0 ]]; then
+    echo "ERROR: service $service is not running"
+    exit $STATE_CRITICAL
+fi
+
+echo "OK: service $service is running"
+exit $STATE_OK
