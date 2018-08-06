@@ -582,7 +582,7 @@ if ($response->is_success) {
         print ("\nDEBUG Parse results => Pool:" . $Pool . "\nAcceptedConn:" . $AcceptedConn . "\nActiveProcesses:" . $ActiveProcesses . " TotalProcesses :".$TotalProcesses . " IdleProcesses :" .$IdleProcesses . "\nMaxActiveProcesses :" . $MaxActiveProcesses . " MaxChildrenReached :" . $MaxChildrenReached . "\nListenQueue :" . $ListenQueue . " ListenQueueLen : " .$ListenQueueLen . " MaxListenQueue: " . $MaxListenQueue ."\n");
     }
 
-    my $TempFile = $TempPath.$o_host.'_check_phpfpm_status'.md5_hex($url);
+    my $TempFile = $TempPath.'_check_phpfpm_status'.md5_hex($url);
     my $FH;
 
     my $LastUptime = 0;
