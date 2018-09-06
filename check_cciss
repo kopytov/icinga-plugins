@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 #
 # HP Smart Array Hardware status plugin for Nagios | Written by Simone Rosa
 # (With HP Array Configuration Utility CLI         |  info [X]

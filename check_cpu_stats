@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 # ==============================================================================
 # CPU Utilization Statistics plugin for Nagios 
 #
