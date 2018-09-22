@@ -1,24 +1,63 @@
 #!/usr/bin/env perl
 use extreme;
 use English;
+use Getopt::Long;
+
+my ( $opt_w, $opt_c, @incidents );
+
+# subs
+
+sub process_arguments() {
+    GetOptions(
+        "w|warning=i"  => \$opt_w,    # warning if above this number
+        "c|critical=i" => \$opt_c,    # critical if above this number
+    );
+    unless ( defined $opt_w && defined $opt_c ) {
+        print "Usage: $0 -w [--warning] <warn> -c [--critical] <crit>\n";
+        exit 3;
+    }
+    if ( $opt_w >= $opt_c ) {
+        print "Warning (-w) cannot be greater than Critical (-c)!\n";
+        exit 3;
+    }
+    return;
+}
 
 exec "sudo $0 @ARGV" if $UID > 0;
+
+process_arguments();
 
 my @snapshots
   = `find /vz/private/*/root.hdd/ -type f -name 'root.hdd.*' 2>/dev/null`;
 my $now           = time;
-my $CRITICAL_TIME = 7;      # days
 my $exit_code   = 0;
+my $exit_code_c = 0;
 chomp(@snapshots);
 
 for my $snapshot (@snapshots) {
     my $snapshots_mdtm = ( stat($snapshot) )[9];
     my $diff = int( ( $now - $snapshots_mdtm ) / 86400 );
-    if ( $diff > $CRITICAL_TIME ) {
-        say "$snapshot created: $diff days ago";
+    if ( $diff >= $opt_c ) {
+        push @incidents, "$snapshot created $diff days ago";
+        $exit_code_c = 2;
+    }
+    elsif ( $diff >= $opt_w && $diff < $opt_c ) {
+        push @incidents, "$snapshot created $diff days ago";
         $exit_code = 1;
     }
 }
 
-say "OK - no overdue snapshots found" if !$exit_code;
-exit $exit_code;
+if ( $exit_code_c ) {
+    say "Found snapshot older than $opt_c days:";
+    say join( "\n", @incidents );
+    exit $exit_code_c;
+}
+elsif ( $exit_code ) {
+    say "Found snapshots older than $opt_w days:";
+    say join( "\n", @incidents );
+    exit $exit_code;
+}
+else {
+    say "OK - no overdue snapshots found";
+    exit $exit_code;
+}
