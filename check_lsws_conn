@@ -1,0 +1,120 @@
+#!/usr/bin/env perl
+use extreme;
+use Getopt::Long;
+
+my ( $opt_h, $opt_wconn, $opt_cconn, $opt_wsslconn, $opt_csslconn, $status,
+    $msg, $perfdata );
+my %ERRORS = ( 'OK' => 0, 'WARNING' => 1, 'CRITICAL' => 2, 'UNKNOWN' => 3 );
+
+# set default limits
+$opt_wconn    = 60;
+$opt_cconn    = 90;
+$opt_wsslconn = 60;
+$opt_csslconn = 90;
+
+sub process_arguments() {
+    GetOptions(
+        "h"         => \$opt_h,
+        "help"      => \$opt_h,
+        "w_conn=i"  => \$opt_wconn,
+        "c_conn=i"  => \$opt_cconn,
+        "w_sconn=i" => \$opt_wsslconn,
+        "c_sconn=i" => \$opt_csslconn,
+    );
+
+    if ($opt_h) {
+        print_help();
+        exit $ERRORS{'OK'};
+    }
+
+    if ( ( $opt_wconn >= $opt_cconn ) || ( $opt_wsslconn >= $opt_csslconn ) )
+    {
+        print "Warning cannot be greater than Critical!\n";
+        return $ERRORS{'UNKNOWN'};
+    }
+    return $ERRORS{'OK'};
+
+}
+
+sub print_help () {
+    my $help_text = <<'END';
+Usage: %s [ --w_conn <warn> --c_conn <crit> --w_sconn <warn> --csconn <crit> ]
+
+Checks the number of free plain and ssl connection slots for LiteSpeed
+  --w_conn=PERCENT # default is 60
+    Exit with WARNING status if less than PERCENT of plain connection slots is free
+  --c_conn=PERCENT # default is 90
+    Exit with CRITICAL status if less than PERCENT of plain connection slots is free
+  --w_sconn=PERCENT # default is 60
+    Exit with WARNING status if less than PERCENT of ssl connection slots is free
+  --c_sconn=PERCENT # default is 90
+    Exit with CRITICAL status if less than PERCENT of plain connection slots is free
+  -h (--help)
+END
+    printf( $help_text, $0 );
+}
+
+$status = process_arguments();
+if ($status) {
+    print "ERROR: processing arguments\n";
+    exit $ERRORS{"UNKNOWN"};
+}
+
+### PLUGIN CODE
+
+my $ls_info;
+my @report = `cat /tmp/lshttpd/.rtreport* | grep ^MAXCONN`;
+
+if ( !@report ) {
+    say "Can't read any data from /tmp/lshttpd/.rtreport";
+    exit $ERRORS{"UNKNOWN"};
+}
+
+for my $result (@report) {
+    chomp $result;
+    my @data = split( ', ', $result );
+    for my $param (@data) {
+        my ( $key, $value ) = split( ': ', $param );
+        $ls_info->{$key} += $value;
+    }
+}
+
+my $state            = $ERRORS{'OK'};
+my $plain_conn_usage = $ls_info->{PLAINCONN} / $ls_info->{MAXCONN} * 100;
+my $ssl_conn_usage   = $ls_info->{SSLCONN} / $ls_info->{MAXSSL_CONN} * 100;
+$perfdata
+  = "| PLAINCONN=$ls_info->{PLAINCONN};$opt_wconn%;$opt_cconn%;$ls_info->{MAXCONN};SSLCONN=$ls_info->{SSLCONN};$opt_wsslconn%;$opt_csslconn%;$ls_info->{MAXSSL_CONN}";
+$msg
+  = "OK: PLAINCONN usage ($plain_conn_usage %), SSLCONN usage ($ssl_conn_usage %) $perfdata";
+
+if ( $plain_conn_usage > $opt_cconn ) {
+    $msg
+      = "CRITICAL: PLAINCONN ($plain_conn_usage %) is above threshold ($opt_cconn % ) $perfdata";
+    $state = $ERRORS{'CRITICAL'};
+    say $msg;
+    exit $state;
+}
+if ( $ssl_conn_usage > $opt_wsslconn ) {
+    $msg
+      = "CRITICAL: SSLCONN ($ssl_conn_usage %) is above threshold ($opt_csslconn % ) $perfdata";
+    $state = $ERRORS{'CRITICAL'};
+    say $msg;
+    exit $state;
+}
+if ( $plain_conn_usage > $opt_wconn ) {
+    $msg
+      = "WARNING: PLAINCONN ($plain_conn_usage %) is above threshold ($opt_wconn % ) $perfdata";
+    $state = $ERRORS{'WARNING'};
+    say $msg;
+    exit $state;
+}
+if ( $ssl_conn_usage > $opt_wsslconn ) {
+    $msg
+      = "WARNING: SSLCONN ($ssl_conn_usage %) is above threshold ($opt_wsslconn % ) $perfdata";
+    $state = $ERRORS{'WARNING'};
+    say $msg;
+    exit $state;
+}
+
+say $msg;
+exit $state;
