@@ -1,0 +1,60 @@
+#!/usr/bin/env perl
+
+use strict;
+use warnings;
+use Carp;
+use Getopt::Long;
+
+sub usage {
+    print <<"END_USAGE";
+Usage:
+    $0 [ options ]
+
+Options:
+    --warn - warning nf_conntrack_count connections. default 80
+    --crit - critical nf_conntrack_count connections. default 90
+    Values is percents of net.nf_conntrack_max.
+END_USAGE
+    exit 1;
+}
+
+my $help;
+my $warn = 80;
+my $crit = 90;
+GetOptions(
+    'warn=i' => \$warn,
+    'crit=i' => \$crit,
+    'h|help' => \$help,
+) || usage;
+return usage() if $help;
+
+my $nf_conntrack_max   = `sysctl -n net.nf_conntrack_max`;
+my $nf_conntrack_count = `sysctl -n net.netfilter.nf_conntrack_count`;
+chomp $nf_conntrack_max;
+chomp $nf_conntrack_count;
+my $percents = sprintf "%.1f", ($nf_conntrack_count / $nf_conntrack_max * 100);
+
+my $msg   = 'UNKNOWN';
+my $state = 3;
+if ( $percents > $crit ) {
+    $msg = "CRITICAL - $percents% ($nf_conntrack_count)";
+    $state = 2;
+}
+elsif ( $percents > $warn ) {
+    $msg = "WARNING - $percents% ($nf_conntrack_count)";
+    $state = 1;
+}
+else {
+    $msg = "OK - $percents% ($nf_conntrack_count)";
+    $state = 0;
+}
+my $perfdata_string =
+  "nf_conntrack_count=$nf_conntrack_count;". 
+  int($nf_conntrack_max*$warn / 100) .';'. 
+  int($nf_conntrack_max*$crit / 100) .";0;$nf_conntrack_max";
+
+print "$msg";
+print "|$perfdata_string\n";
+exit $state;
+
+1;
