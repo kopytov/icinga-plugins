@@ -93,9 +93,14 @@ my $state            = $ERRORS{'OK'};
 my $plain_conn_usage = $ls_info->{PLAINCONN} / $ls_info->{MAXCONN} * 100;
 my $ssl_conn_usage   = $ls_info->{SSLCONN} / $ls_info->{MAXSSL_CONN} * 100;
 $perfdata
-  = "| PLAINCONN=$ls_info->{PLAINCONN};$opt_wconn%;$opt_cconn%;$ls_info->{MAXCONN};SSLCONN=$ls_info->{SSLCONN};$opt_wsslconn%;$opt_csslconn%;$ls_info->{MAXSSL_CONN}";
+  = "| PLAINCONN=$ls_info->{PLAINCONN};" .
+    int($ls_info->{MAXCONN}*$opt_wconn/100) . ';' .
+    int($ls_info->{MAXCONN}*$opt_cconn/100) . ";;$ls_info->{MAXCONN} " .
+    "SSLCONN=$ls_info->{SSLCONN};" .
+    int($ls_info->{MAXSSL_CONN}*$opt_wsslconn/100) . ';' .
+    int($ls_info->{MAXSSL_CONN}*$opt_csslconn/100) . ";;$ls_info->{MAXSSL_CONN}";
 $msg
-  = "OK: PLAINCONN usage ($plain_conn_usage%), SSLCONN usage ($ssl_conn_usage%) $perfdata";
+  = "OK - PLAINCONN usage - $plain_conn_usage% ($ls_info->{PLAINCONN}), SSLCONN usage - $ssl_conn_usage% ($ls_info->{SSLCONN}) $perfdata";
 
 if ( $plain_conn_usage > $opt_cconn ) {
     $msg
