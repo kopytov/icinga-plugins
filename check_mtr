@@ -1,5 +1,8 @@
 #!/bin/bash
-result=`/usr/lib64/nagios/plugins/check_ping -H $1 -w $2 -c $3`
+[ -f /usr/lib/nagios/plugins/check_ping ]   && check_ping=/usr/lib/nagios/plugins/check_ping
+[ -f /usr/lib64/nagios/plugins/check_ping ] && check_ping=/usr/lib64/nagios/plugins/check_ping
+[ -z "$check_ping" ] && echo "check_ping not found" && exit 255
+result=`$check_ping -H $1 -w $2 -c $3`
 status=$?
 echo $result
 if [[ $status -ne 0 && $status -ne 3 ]]; then
