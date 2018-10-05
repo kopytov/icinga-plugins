@@ -2,7 +2,7 @@
 
 use strict;
 use Getopt::Std;
-use lib "/usr/lib64/nagios/plugins";
+use lib qw( /usr/lib/nagios/plugins /usr/lib64/nagios/plugins );
 use utils qw(%ERRORS);
 
 use vars qw/ %opt /;
