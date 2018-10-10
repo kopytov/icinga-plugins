@@ -90,8 +90,8 @@ for my $result (@report) {
 }
 
 my $state            = $ERRORS{'OK'};
-my $plain_conn_usage = $ls_info->{PLAINCONN} / $ls_info->{MAXCONN} * 100;
-my $ssl_conn_usage   = $ls_info->{SSLCONN} / $ls_info->{MAXSSL_CONN} * 100;
+my $plain_conn_usage = sprintf("%.2f", $ls_info->{PLAINCONN} / $ls_info->{MAXCONN} * 100);
+my $ssl_conn_usage   = sprintf("%.2f", $ls_info->{SSLCONN} / $ls_info->{MAXSSL_CONN} * 100);
 $perfdata
   = "| PLAINCONN=$ls_info->{PLAINCONN};" .
     int($ls_info->{MAXCONN}*$opt_wconn/100) . ';' .
