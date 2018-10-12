@@ -459,7 +459,7 @@ foreach my $dev ( sort keys %devices ) {
                 my $status
                   = $attribute_name ~~ @{ $exclude_failed{attrs} }  ? 'OK'
                   : 'WARNING';
-                return_status('WARNING');
+                return_status($status);
             }
         }
 
