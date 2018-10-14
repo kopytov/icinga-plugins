@@ -109,7 +109,7 @@ if ( $plain_conn_usage > $opt_cconn ) {
     say $msg;
     exit $state;
 }
-if ( $ssl_conn_usage > $opt_wsslconn ) {
+if ( $ssl_conn_usage > $opt_csslconn ) {
     $msg
       = "CRITICAL: SSLCONN ($ssl_conn_usage %) is above threshold ($opt_csslconn % ) $perfdata";
     $state = $ERRORS{'CRITICAL'};
