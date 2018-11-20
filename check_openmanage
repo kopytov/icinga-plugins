@@ -1081,7 +1081,7 @@ sub find_omreport {
   OMREPORT_PATH:
     foreach my $bin (@omreport_paths) {
 	if (-x $bin) {
-	    $omreport = qq{"$bin"};
+	    $omreport = "sudo $bin";
 	    last OMREPORT_PATH;
 	}
     }
