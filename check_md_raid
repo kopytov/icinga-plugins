@@ -8,7 +8,7 @@ RAID_DEVICES=`grep ^md -c /proc/mdstat`
 
 # Get count of degraded arrays
 #RAID_STATUS=`grep "\[.*_.*\]" /proc/mdstat -c`
-RAID_STATUS=`egrep "\[.*(=|>|\.).*\]" /proc/mdstat -c`
+RAID_STATUS=`egrep "\[.*(=|>|\.|_).*\]" /proc/mdstat -c`
 
 # Is an array currently recovering, get percentage of recovery
 RAID_RECOVER=`grep recovery /proc/mdstat | awk '{print $4}'`

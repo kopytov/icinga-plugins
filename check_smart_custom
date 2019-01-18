@@ -455,7 +455,11 @@ foreach my $dev ( sort keys %devices ) {
                 push( @error_messages,
                     "Attribute $attribute_name failed: value ($current_value) less thresh_value ($thresh_value)"
                 );
-                return_status('WARNING');
+
+                my $status
+                  = $attribute_name ~~ @{ $exclude_failed{attrs} }  ? 'OK'
+                  : 'WARNING';
+                return_status($status);
             }
         }
 
