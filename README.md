@@ -65,3 +65,6 @@ check_file_content -  Nagios plugin to check file content;
 Imported from old pananames production server;
 
 check_lsws_conn - check free lsws slots; check_lsws_conn --help
+
+check_whois - check days left until the domain expiration; check_whois --help
+Used for whois server check

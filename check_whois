@@ -1,0 +1,120 @@
+#!/bin/bash
+
+STATE_OK=0
+STATE_WARNING=1
+STATE_CRITICAL=2
+STATE_UNKNOWN=3
+
+WARNING_DAYS=${WARNING_DAYS:="29"}
+CRITICAL_DAYS=${CRITICAL_DAYS:="7"}
+
+print_usage() {
+        echo ""
+        echo "Domain name expirtion check script for Nagios"
+        echo ""
+        echo "Usage: $0 -d example.com"
+        echo ""
+        echo "  -w  Warning days before domain expire (default 29)"
+        echo "  Exit with WARNING status if domain expire less than warning days"
+        echo "  -c  Crical days before domain expire (default 7)"
+        echo "  Exit with CRITICAL status if domain expire less than critical day"
+        echo "  -h  Whois server to check (optinal)"
+        echo "  -p  Whois server port number (default : 43)"
+    echo "  -t  Timeout in seconds (default : 60)"
+        echo "  -h  Show this page"
+        echo ""
+    echo "Usage: $0"
+    echo "Usage: $0 --help"
+    echo ""
+    exit 0
+}
+
+print_help() {
+    print_usage
+        echo ""
+        echo "This plugin will check domain name expiration date"
+        echo ""
+    exit 0
+}
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --help)
+            print_help
+            exit $STATE_UNKNOWN
+            ;;
+        -d | --domain)
+                shift
+                DOMAIN=$1
+                ;;
+        -h | -H)
+                shift
+                HOST=$1
+                ;;
+        -w | --warning)
+                shift
+                WARNING_DAYS=$1
+                ;;
+        -c | --critical)
+               shift
+               CRITICAL_DAYS=$1
+               ;;
+        -p | --port)
+               shift
+               CRITICAL_DAYS=$1
+               ;;
+        -t | --timeout)
+               shift
+               TIMEOUT=$1
+               ;;
+    *)  echo "Unknown argument: $1"
+            print_usage
+            exit $STATE_UNKNOWN
+            ;;
+        esac
+shift
+done
+
+if [ ! -z "$HOST" ]; then
+    HOST="-h $HOST"
+fi
+if [ -z "$TIMEOUT" ]; then
+        TIMEOUT="60"
+fi
+if [ -z "$PORT" ]; then
+    PORT='43'
+fi
+if [ -z "$DOMAIN" ]; then
+    echo "DOMAIN must be specified"
+    print_usage
+    exit $STATE_UNKNOWN
+fi
+expireDate=$(timeout "$TIMEOUT"s whois $HOST -p $PORT $DOMAIN | egrep 'Registration Expiration Date|Registry Expiry Date' | awk '{print $NF}'| cut -c1-10)
+if [ -z $expireDate ]; then
+    echo "CRITICAL: Can't Get $DOMAIN Expiration Date"
+    exit $STATE_CRITICAL
+fi
+currentDate=`date +%s`
+
+expireDate=`date +%s --date="$expireDate"`
+
+### Difference between expiration and right now
+timeDiffSec=`expr $expireDate - $currentDate`
+
+### Convert to days (86400 seconds in a day)
+timeDiffDays=`expr $timeDiffSec / 86400`
+
+if [ $timeDiffDays -lt 15 ]; then
+    echo "CRITICAL: $timeDiffDays Left Until $DOMAIN Expiration"
+    exit $STATE_CRITICAL
+fi
+
+if [ $timeDiffDays -lt 31 ]; then
+    echo "WARNING: $timeDiffDays Left Until $DOMAIN Expiration"
+    exit $STATE_WARNING
+fi
+
+if [ $timeDiffDays -gt 30 ]; then
+    echo "OK: $timeDiffDays Left Until $DOMAIN Expiration"
+    exit $STATE_OK
+fi
