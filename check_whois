@@ -14,14 +14,14 @@ print_usage() {
         echo ""
         echo "Usage: $0 -d example.com"
         echo ""
-        echo "  -w  Warning days before domain expire (default 29)"
+        echo "  -w|--warning  Warning days before domain expire (default 29)"
         echo "  Exit with WARNING status if domain expire less than warning days"
-        echo "  -c  Crical days before domain expire (default 7)"
+        echo "  -c|--critical  Crical days before domain expire (default 7)"
         echo "  Exit with CRITICAL status if domain expire less than critical day"
-        echo "  -h  Whois server to check (optinal)"
-        echo "  -p  Whois server port number (default : 43)"
-    echo "  -t  Timeout in seconds (default : 60)"
-        echo "  -h  Show this page"
+        echo "  -h|--host  Whois server to check (optinal)"
+        echo "  -p|--port  Whois server port number (default : 43)"
+        echo "  -t|--timeout  Timeout in seconds (default : 60)"
+        echo "  --help  Show this page"
         echo ""
     echo "Usage: $0"
     echo "Usage: $0 --help"
@@ -34,7 +34,7 @@ print_help() {
         echo ""
         echo "This plugin will check domain name expiration date"
         echo ""
-    exit 0
+        exit 0
 }
 
 while [ $# -gt 0 ]; do
@@ -47,7 +47,7 @@ while [ $# -gt 0 ]; do
                 shift
                 DOMAIN=$1
                 ;;
-        -h | -H)
+        -h | --host)
                 shift
                 HOST=$1
                 ;;
@@ -104,17 +104,17 @@ timeDiffSec=`expr $expireDate - $currentDate`
 ### Convert to days (86400 seconds in a day)
 timeDiffDays=`expr $timeDiffSec / 86400`
 
-if [ $timeDiffDays -lt 15 ]; then
+if [ $timeDiffDays -lt $CRITICAL_DAYS ]; then
     echo "CRITICAL: $timeDiffDays Left Until $DOMAIN Expiration"
     exit $STATE_CRITICAL
 fi
 
-if [ $timeDiffDays -lt 31 ]; then
+if [ $timeDiffDays -lt $WARNING_DAYS ]; then
     echo "WARNING: $timeDiffDays Left Until $DOMAIN Expiration"
     exit $STATE_WARNING
 fi
 
-if [ $timeDiffDays -gt 30 ]; then
+if [ $timeDiffDays -gt $WARNING_DAYS ]; then
     echo "OK: $timeDiffDays Left Until $DOMAIN Expiration"
     exit $STATE_OK
 fi
