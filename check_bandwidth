@@ -37,6 +37,10 @@ if ( $interface eq 'all' ) {
       = map { basename $_ }
       grep { !-d "$_/bridge" && `grep -i up $_/operstate` } @all_interfaces
       if !@interfaces;
+
+    # or try to select venet ones
+    @interfaces = grep /^venet/, map { basename $_ }  @all_interfaces
+      if !@interfaces;
 }
 else {
     @interfaces = split( / /, $interface );
