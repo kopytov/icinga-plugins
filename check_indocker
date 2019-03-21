@@ -33,7 +33,6 @@ croak "need to specify plugin to execute" if !$plugin;
 
 $prefix //='base';
 my $plugin_path = "/usr/lib64/nagios/plugins/$prefix/check_$plugin";
-croak "specified plugin not found at $plugin_path" if !-f $plugin_path;
 
 system("docker exec $container $plugin_path $params");
 exit $? >> 8;
