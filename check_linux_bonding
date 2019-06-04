@@ -484,7 +484,7 @@ foreach my $b (sort keys %bonding) {
 		my @slaves = keys %slave;
 		my $msg = sprintf 'Bonding interface %s [%s] has only one slave (%s)',
 		  $b, $bonding{$b}{mode}, $slaves[0];
-		report($msg, $E_WARNING);
+		report($msg, $E_CRITICAL);
 	    }
 	    elsif (scalar keys %slave == 0) {  # FIXME: does this ever happen?
 		my $msg = sprintf 'Bonding interface %s [%s] has zero slaves!',
