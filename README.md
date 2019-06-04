@@ -68,3 +68,5 @@ check_lsws_conn - check free lsws slots; check_lsws_conn --help
 
 check_whois - check days left until the domain expiration; check_whois --help
 Used for whois server check
+
+check_linux_bonding - https://exchange.nagios.org/directory/Plugins/Operating-Systems/Linux/check_linux_bonding/details
