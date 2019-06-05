@@ -311,8 +311,9 @@ sub find_bonding_sysfs {
 
 	# get slave status
 	foreach my $slave (@slaves) {
-	    open my $STATE, '<', "$sysdir/$bond/slave_$slave/operstate"
-	      or unknown_error("Couldn't open $sysdir/$bond/slave_$slave/operstate: $!");
+	    my $prefix = -d "$sysdir/$bond/slave_$slave" ? 'slave' : 'lower';
+	    open my $STATE, '<', "$sysdir/$bond/$prefix" . "_$slave/operstate"
+	      or unknown_error("Couldn't open $sysdir/$bond/$prefix" . "_$slave/operstate: $!");
 	    chop($bonding{$bond}{slave}{$slave} = <$STATE>);
 	    close $STATE;
 	}
