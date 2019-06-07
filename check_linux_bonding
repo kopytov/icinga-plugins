@@ -490,7 +490,7 @@ foreach my $b (sort keys %bonding) {
 	    elsif (scalar keys %slave == 0) {  # FIXME: does this ever happen?
 		my $msg = sprintf 'Bonding interface %s [%s] has zero slaves!',
 		  $b, $bonding{$b}{mode};
-		report($msg, $E_CRITICAL);
+		report($msg, $E_WARNING);
 	    }
 	    elsif (defined $bonding{$b}{ad_num} and $bonding{$b}{ad_num} != scalar keys %slave
 		   and $opt{ignore_num_ad} == 0) {
