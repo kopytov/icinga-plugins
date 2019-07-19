@@ -75,16 +75,33 @@ for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`;
         fi
     fi
 
-    last_archive_date=`bkp list $config | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
-    if [ ! $last_archive_date ]; then
-        exit_text+="can't find last backup for $config_basename\n"
-        exit_status=1
-        continue
-    fi
-    last_archive_seconds=`date +%s -d $last_archive_date`
-    if (( $[now - last_archive_seconds] > $limit )); then
-        exit_text+="last backup is too old for $config_basename\n"
-        exit_status=1
+    if [ -n "$multiprofile" ]; then
+        for profile in `bkp list-profiles $config`; do
+            echo "DEBUG profile=$profile"
+            last_archive_date=`bkp --profile=$profile list $config | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
+            if [ ! $last_archive_date ]; then
+                exit_text+="can't find last backup for $config_basename:$profile\n"
+                exit_status=1
+                continue
+            fi
+            last_archive_seconds=`date +%s -d $last_archive_date`
+            if (( $[now - last_archive_seconds] > $limit )); then
+                exit_text+="last backup is too old for $config_basename:$profile\n"
+                exit_status=1
+            fi
+        done
+    else
+        last_archive_date=`bkp list $config | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
+        if [ ! $last_archive_date ]; then
+            exit_text+="can't find last backup for $config_basename\n"
+            exit_status=1
+            continue
+        fi
+        last_archive_seconds=`date +%s -d $last_archive_date`
+        if (( $[now - last_archive_seconds] > $limit )); then
+            exit_text+="last backup is too old for $config_basename\n"
+            exit_status=1
+        fi
     fi
 done
 
