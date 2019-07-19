@@ -15,10 +15,10 @@ while [ $# -gt 0 ]; do
   shift
 done
 
-usage="$(basename "$0") [--dir] [--force_period] - plugin for check backups according to profile plan using bkp list.
+usage="$(basename "$0") [--dir] [--force_period] - plugin for check backups according to config plan using bkp list.
 
 params:
-    --dir           - profiles location ( default: /etc/opt/bkp )
+    --dir           - configs location ( default: /etc/opt/bkp )
     --force_period  - d,w,m - daily,weekly or montly
                       tells that last backup must be not older then period + 1 day
 example:
@@ -46,10 +46,10 @@ case $force_period in
     ;;
 esac
 
-# find all profiles in specified dir old than period
-for profile in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`; do
-    profile_basename=`basename $profile`
-    has_daily=`grep -oP "\s+d:" $profile`
+# find all configs in specified dir old than period
+for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`; do
+    config_basename=`basename $config`
+    has_daily=`grep -oP "\s+d:" $config`
     test $has_daily && limit=$[sec_in_day*period]
     if [ $force_period ]; then
         limit=$[sec_in_day*period]
@@ -57,7 +57,7 @@ for profile in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`
 
     # solusvm part; need .my.cnf file with all stuff
     if [[ $dir =~ ^/etc/opt/bkp/solusvm/?$ ]]; then
-        ctid=`grep -oP "\s+ctid:\s+\K\d+" $profile`
+        ctid=`grep -oP "\s+ctid:\s+\K\d+" $config`
         if [ ! -f "/etc/vz/conf/${ctid}.conf" ]; then
             continue
         fi
@@ -72,15 +72,15 @@ for profile in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`
         fi
     fi
 
-    last_archive_date=`bkp list $profile | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
+    last_archive_date=`bkp list $config | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
     if [ ! $last_archive_date ]; then
-        exit_text+="can't find last backup for $profile_basename\n"
+        exit_text+="can't find last backup for $config_basename\n"
         exit_status=1
         continue
     fi
     last_archive_seconds=`date +%s -d $last_archive_date`
     if (( $[now - last_archive_seconds] > $limit )); then
-        exit_text+="last backup is too old for $profile_basename\n"
+        exit_text+="last backup is too old for $config_basename\n"
         exit_status=1
     fi
 done
