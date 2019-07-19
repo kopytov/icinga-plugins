@@ -77,7 +77,6 @@ for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`;
 
     if [ -n "$multiprofile" ]; then
         for profile in `bkp list-profiles $config`; do
-            echo "DEBUG profile=$profile"
             last_archive_date=`bkp --profile=$profile list $config | tail -1 | grep -oP "\d{4}-\d{2}-\d{2}"`
             if [ ! $last_archive_date ]; then
                 exit_text+="can't find last backup for $config_basename:$profile\n"
