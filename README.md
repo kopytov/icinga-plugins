@@ -58,7 +58,7 @@ check_eximq_docker - old check exim mail queue plugin, now used in docker CTs;
 
 check_systemd_service - check if systemd service is running;
 
-check_phpfpm_status - check php-fpm status; modified to support unix socket by -F or --unixsock option; perl-FCGI-Client is required;
+check_phpfpm_status_custom - check php-fpm status; modified to support unix socket by -F or --unixsock option; perl-FCGI-Client is required;
 https://github.com/regilero/check_phpfpm_status
 
 check_file_content -  Nagios plugin to check file content;
