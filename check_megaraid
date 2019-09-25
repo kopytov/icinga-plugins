@@ -686,7 +686,7 @@ if totalunconfdrivenumber:
         arraydisk = returnUnconfDiskInfo(output,controllerid)
         for array in arraydisk:
             dbgprint('Disk c'+str(controllerid)+'uXpY status : ' + array[3])
-            if not array[3] == 'Online' and not array[3] == 'Unconfigured(good), Spun Up':
+            if not array[3] == 'Online' and not array[3] == 'Unconfigured(good), Spun Up' and not array[3] == 'Hotspare, Spun Up':
                 bad = True
                 nagiosbaddisk=nagiosbaddisk+1
             else:
