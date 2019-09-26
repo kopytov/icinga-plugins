@@ -1,7 +1,14 @@
 #!/usr/bin/env perl
+use Getopt::Long;
 
 my $ARCCONF = '/usr/sbin/arcconf';
 my @INFO    = `sudo $ARCCONF getconfig 1`;
+
+my $battery = undef;    # ignore battery warnings
+GetOptions( battery => \$battery ) || do {
+    print "Failed to parse command line arguments\n";
+    exit 3;
+};
 
 if ( !@INFO || $? ) {
     print "Can't get info from arcconf\n";
@@ -15,7 +22,7 @@ my @PD_INFO = grep /Device #|  Serial|  State|S.M.A.R.T/i, @INFO;
 my ( %PD, @warnings, $num );
 
 push @warnings, "Controller: $CONTROLLER" if $CONTROLLER !~ /^Optimal|^OK/i;
-push @warnings, "Battery: $BATTERY"       if $BATTERY !~ /Optimal|Charging/i;
+push @warnings, "Battery: $BATTERY"       if $BATTERY !~ /Optimal|Charging/i && !$battery;
 push @warnings, "LD: $LD"                 if $LD !~ /^Optimal/i;
 
 for my $line (@PD_INFO) {
