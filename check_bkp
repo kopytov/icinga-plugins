@@ -60,7 +60,7 @@ for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`;
 
     # solusvm part; need .my.cnf file with all stuff
     if [[ $dir =~ ^/etc/opt/bkp/solusvm/?$ ]]; then
-        ctid=`grep -oP "\s+ctid:.*?\K\d+" $config`
+        ctid=`grep -oP "\s+(ctid|vm):.*?\K\d+" $config`
         if [ -z $ctid ]; then
             exit_text+="can't determine ctid from $config\n"
             exit_status=1
