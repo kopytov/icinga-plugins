@@ -60,22 +60,36 @@ for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`;
 
     # solusvm part; need .my.cnf file with all stuff
     if [[ $dir =~ ^/etc/opt/bkp/solusvm/?$ ]]; then
-        ctid=`grep -oP "\s+(ctid|vm):.*?\K\d+" $config`
+        ctid=`grep -oP "\s+(ctid|vm):.*?\K\w+" $config`
         if [ -z $ctid ]; then
             exit_text+="can't determine ctid from $config\n"
             exit_status=1
         fi
-        if [ ! -f "/etc/vz/conf/${ctid}.conf" ]; then
-            continue
-        fi
-	if [ ! -z "$(sudo vzlist -S -H ${ctid})" ]; then
-            continue
-        fi
-	suspended=`grep -soPi "disabled=.*yes" /etc/vz/conf/${ctid}.conf`
-        test $suspended && continue
-        last_unsuspend_seconds=`mysql -sN -e "select max(date) from systemmessages where content like '%/vz/private/$ctid%' and subject like '%[Unsuspend]%'"`
-        if (( $[now - last_unsuspend_seconds] < $limit )); then
-            continue
+        type=${config_basename:0:2}
+        if [ "$type" = "CT" ]; then
+            if [ ! -f "/etc/vz/conf/${ctid}.conf" ]; then
+                continue
+            fi
+            if [ ! -z "$(sudo vzlist -S -H ${ctid})" ]; then
+                continue
+            fi
+            suspended=`grep -soPi "disabled=.*yes" /etc/vz/conf/${ctid}.conf`
+            test $suspended && continue
+            last_unsuspend_seconds=`mysql -sN -e "select max(date) from systemmessages where content like '%/vz/private/$ctid%' and subject like '%[Unsuspend]%'"`
+            if (( $[now - last_unsuspend_seconds] < $limit )); then
+                continue
+            fi
+
+        elif [ "$type" = "VM" ]; then
+            if [ ! -f "/etc/libvirt/qemu/${ctid}.xml" ]; then
+                continue
+            fi
+            if ! virsh domstate $ctid &>/dev/null; then
+                continue
+            fi
+        else
+            exit_text+="can't determine virtualization type for $config\n"
+            exit_status=1
         fi
     fi
 
