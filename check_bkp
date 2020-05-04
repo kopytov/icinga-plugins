@@ -87,6 +87,14 @@ for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`;
             if ! virsh domstate $ctid &>/dev/null; then
                 continue
             fi
+            request="select vm,disabled,max(unsusp_admin) as unsusp_admin ,max(unsusp_api) as unsusp_api from fozzy_kvm_info where vm = '$ctid';"
+            read -r vm suspended unsusp_admin unsusp_api <<<$(mysql -sN -e "$request")
+            if [ $suspended -eq 1 ]; then
+                continue
+            fi
+            if (( $[now - unsusp_admin] < $limit || $[now - unsusp_api] < $limit )); then
+                continue
+            fi
         else
             exit_text+="can't determine virtualization type for $config\n"
             exit_status=1
