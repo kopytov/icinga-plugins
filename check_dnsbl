@@ -78,7 +78,7 @@ my @rbls = qw/
   all.spamblock.unit.liu.se
   /;
 
-my @white_list = read_file('/etc/dnsblwhitelist') if -f '/etc/dnsblwhitelist';
+my @white_list = read_file('/etc/icinga2/plinc/dnsblwhitelist') if -f '/etc/icinga2/plinc/dnsblwhitelist';
 chomp @white_list;
 
 # get list of ips
