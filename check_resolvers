@@ -14,7 +14,7 @@ if [[ ! -z $(host google.com 2>/dev/null | grep 'connection timed out') ]]; then
 fi
 
 for res in $resolvers; do
-    host=`dig @$res any google.com +short 2>/dev/null | grep 'connection timed out'`
+    host=`dig @$res google.com +short 2>/dev/null | grep 'connection timed out'`
     if [[ ! -z $host ]]; then
         result+=$(echo -e "WARNING - Resolver $res is unreachable \n")
         exit_code=1
