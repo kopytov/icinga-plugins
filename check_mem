@@ -190,7 +190,7 @@ sub get_memory_info {
                 $hugepages_total_2m_kb += read_file($total_file) * 2048;
                 $hugepages_free_2m_kb  += read_file($free_file) * 2048;
             }
-            $free_memory_kb += $hugepages_free_2m_kb;
+            $used_memory_kb -= $hugepages_free_2m_kb;
             $hugepages_used_1g_kb = $hugepages_total_1g_kb - $hugepages_free_1g_kb;
             $hugepages_used_2m_kb = $hugepages_total_2m_kb - $hugepages_free_2m_kb;
         }
