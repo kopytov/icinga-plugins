@@ -35,7 +35,7 @@ use File::Slurp qw(read_file);
 # Predefined exit codes for Nagios
 use vars qw($opt_c $opt_f $opt_u $opt_w $opt_C $opt_v $opt_p %exit_codes);
 %exit_codes   = ('UNKNOWN' , 3,
-        	 'OK'      , 0,
+             'OK'      , 0,
                  'WARNING' , 1,
                  'CRITICAL', 2,
                  );
@@ -44,29 +44,31 @@ use vars qw($opt_c $opt_f $opt_u $opt_w $opt_C $opt_v $opt_p %exit_codes);
 init();
 
 # Get the numbers:
-my ( $free_memory_kb,$used_memory_kb,$caches_kb, $hugepages_used_1g_kb, $hugepages_total_1g_kb, $hugepages_used_2m_kb, $hugepages_total_2m_kb ) = get_memory_info();
+my ( $free_memory_kb,$used_memory_kb,$caches_kb, $hugepages_used_1g_kb, $hugepages_total_1g_kb, $hugepages_used_2m_kb, $hugepages_total_2m_kb, $used_memory_huge_kb ) = get_memory_info();
 print "$free_memory_kb Free\n$used_memory_kb Used\n$caches_kb Cache\n" if ($opt_v);
 
 if ($opt_C) { #Do we count caches as free?
     $used_memory_kb -= $caches_kb;
+    $used_memory_huge_kb -= $caches_kb if $opt_p;
     $free_memory_kb += $caches_kb;
 }
 
 # Round to the nearest KB
 $free_memory_kb = sprintf('%d',$free_memory_kb);
 $used_memory_kb = sprintf('%d',$used_memory_kb);
+$used_memory_huge_kb = sprintf('%d',$used_memory_huge_kb) if $opt_p;
 $caches_kb = sprintf('%d',$caches_kb);
 
 # Tell Nagios what we came up with
 my @list = ($used_memory_kb,$free_memory_kb,$caches_kb);
 if ($opt_p) {
-    push @list, ($hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb);
+    push @list, ($hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb,$used_memory_huge_kb);
 }
 tell_nagios(@list);
 
 
 sub tell_nagios {
-    my ($used,$free,$caches,$hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb) = @_;
+    my ($used,$free,$caches,$hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb,$used_memory_huge_kb) = @_;
 
     # Calculate Total Memory
     my $total = $free + $used;
@@ -101,6 +103,12 @@ sub tell_nagios {
     }
     elsif ($opt_u) {
       my $percent    = sprintf "%.1f", ($used / $total * 100);
+        if ($opt_p) {
+            my $percent_huge    = sprintf "%.1f", ($used_memory_huge_kb / $total * 100);
+            if ($percent_huge >= $opt_c) {
+                finish("CRITICAL - $percent_huge% ($used_memory_huge_kb kB) used!$perfdata",$exit_codes{'CRITICAL'});
+            }
+        }
       if ($percent >= $opt_c) {
           finish("CRITICAL - $percent% ($used kB) used!$perfdata",$exit_codes{'CRITICAL'});
       }
@@ -137,7 +145,7 @@ sub get_memory_info {
     my $free_memory_kb  = 0;
     my $total_memory_kb = 0;
     my $caches_kb       = 0;
-    my ( $hugepages_used_1g_kb, $hugepages_free_1g_kb, $hugepages_total_1g_kb, $hugepages_used_2m_kb, $hugepages_free_2m_kb, $hugepages_total_2m_kb );
+    my ( $hugepages_used_1g_kb, $hugepages_free_1g_kb, $hugepages_total_1g_kb, $hugepages_used_2m_kb, $hugepages_free_2m_kb, $hugepages_total_2m_kb, $used_memory_huge_kb );
     my $uname;
     if ( -e '/usr/bin/uname') {
         $uname = `/usr/bin/uname -a`;
@@ -191,8 +199,10 @@ sub get_memory_info {
                 $hugepages_free_2m_kb  += read_file($free_file) * 2048;
             }
             $used_memory_kb -= $hugepages_free_2m_kb;
+            $free_memory_kb += $hugepages_free_2m_kb;
             $hugepages_used_1g_kb = $hugepages_total_1g_kb - $hugepages_free_1g_kb;
             $hugepages_used_2m_kb = $hugepages_total_2m_kb - $hugepages_free_2m_kb;
+            $used_memory_huge_kb = $used_memory_kb + $hugepages_free_2m_kb + $hugepages_free_1g_kb;
         }
     }
     elsif ( $uname =~ /HP-UX/ ) {
@@ -200,12 +210,12 @@ sub get_memory_info {
       my @meminfo = `/usr/bin/sudo /usr/local/bin/kmeminfo`;
       foreach (@meminfo) {
         chomp;
-      	if (/^Physical memory\s\s+=\s+(\d+)\s+(\d+.\d)g/) {
-      	  $total_memory_kb = ($2 * 1024 * 1024);
-      	}
-      	elsif (/^Free memory\s\s+=\s+(\d+)\s+(\d+.\d)g/) {
-      	  $free_memory_kb = ($2 * 1024 * 1024);
-      	}
+        if (/^Physical memory\s\s+=\s+(\d+)\s+(\d+.\d)g/) {
+          $total_memory_kb = ($2 * 1024 * 1024);
+        }
+        elsif (/^Free memory\s\s+=\s+(\d+)\s+(\d+.\d)g/) {
+          $free_memory_kb = ($2 * 1024 * 1024);
+        }
       }
      $used_memory_kb = $total_memory_kb - $free_memory_kb;
     }
@@ -350,8 +360,8 @@ sub get_memory_info {
             print "You can't report on $uname caches!\n";
             exit $exit_codes{UNKNOWN};
         }
-    	my $command_line = `vmstat | tail -1 | awk '{print \$4,\$5}'`;
-    	chomp $command_line;
+        my $command_line = `vmstat | tail -1 | awk '{print \$4,\$5}'`;
+        chomp $command_line;
         my @memlist      = split(/ /, $command_line);
 
         # Define the calculating scalars
@@ -360,7 +370,7 @@ sub get_memory_info {
         $total_memory_kb = $used_memory_kb + $free_memory_kb;
     }
     if ($opt_p) {
-        return ($free_memory_kb,$used_memory_kb,$caches_kb,$hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb);
+        return ($free_memory_kb,$used_memory_kb,$caches_kb,$hugepages_used_1g_kb,$hugepages_total_1g_kb,$hugepages_used_2m_kb,$hugepages_total_2m_kb,$used_memory_huge_kb);
     }
     return ($free_memory_kb,$used_memory_kb,$caches_kb);
 }
