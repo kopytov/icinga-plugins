@@ -27,7 +27,6 @@
 # Tell Perl what we need to use
 use strict;
 use Getopt::Std;
-use File::Slurp qw(read_file);
 
 #TODO - Convert to Nagios::Plugin
 #TODO - Use an alarm
@@ -189,6 +188,8 @@ sub get_memory_info {
         }
         $used_memory_kb = $total_memory_kb - $free_memory_kb;
         if ($opt_p) {
+            require File::Slurp;
+            File::Slurp->import("read_file");
             # calculate 2M pages
             my $nodeinfo = '/sys/devices/system/node/online';
             my @nodes = map { chomp; split /-/ } read_file($nodeinfo);
