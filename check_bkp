@@ -48,9 +48,10 @@ esac
 
 # check if bkp supports multiple profiles in configs
 multiprofile=`bkp -? 2>&1 | grep list-profiles`
-
+exclude='/etc/icinga2/plinc/bkp_exclude'
 # find all configs in specified dir old than period
 for config in `find $dir -maxdepth 1 -type f -mtime +$[period-1] -name "*.yml"`; do
+    [[ -f $exclude ]] && grep -q $config $exclude && continue
     config_basename=`basename $config`
     has_daily=`grep -oP "\s+d:" $config`
     test $has_daily && limit=$[sec_in_day*period]
